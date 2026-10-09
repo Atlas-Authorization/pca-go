@@ -839,7 +839,7 @@ func WireFailure(why string) Verdict {
 }
 
 // VerifyPCActnCore runs the normative check order: wire, version, audience, validity, chain,
-// plan_inclusion, leaf_signature, counter. now is epoch milliseconds; audience is this verifier's own id.
+// grant_ref_bound, plan_inclusion, leaf_signature, counter. now is epoch milliseconds; audience is this verifier's own id.
 func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, audience string) (v Verdict, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -905,6 +905,24 @@ func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, au
 			} else {
 				fail("chain", why)
 			}
+		}
+	}
+
+	// grant_ref_bound (normative): the signed grant_ref MUST be a non-empty string byte-equal to the id of the
+	// ROOT capability of the presented chain (cap_chain[0].id). Evaluated independently of the chain verdict and
+	// fail-closed on an empty / malformed chain. Replay state is keyed on grant_ref, so it must not be free.
+	{
+		gr, _ := pcactn["grant_ref"].(string)
+		rootID := ""
+		if len(chain) > 0 {
+			if rc, ok := chain[0].(map[string]any); ok {
+				rootID, _ = rc["id"].(string)
+			}
+		}
+		if gr != "" && rootID != "" && gr == rootID {
+			pass("grant_ref_bound")
+		} else {
+			fail("grant_ref_bound", "grant_ref is not the id of the root capability in cap_chain")
 		}
 	}
 
