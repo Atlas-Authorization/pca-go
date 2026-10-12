@@ -19,13 +19,18 @@ const (
 	defaultRev = "reversible"
 
 	// PCActnVer is the only wire version this verifier accepts.
-	PCActnVer     = 2
-	MaxChainHops  = 16
-	MaxLifetimeMs = 3_600_000
-	MaxSkewMs     = 60_000
-	maxAudLen     = 256
-	maxNonceLen   = 128
-	b32, sigLen   = 32, 64
+	PCActnVer    = 2
+	MaxChainHops = 16
+	// Shared hard caveat caps (all PCA verifiers): per-hop cumulative list, and the sum over every hop of a chain.
+	MaxCaveatsPerHop   = 256
+	MaxCaveatsPerChain = 1024
+	// MaxArtifactBytes is the shared raw wire-size cap of a PCActn JSON document (UTF-8 bytes), checked before parsing.
+	MaxArtifactBytes = 524288
+	MaxLifetimeMs    = 3_600_000
+	MaxSkewMs        = 60_000
+	maxAudLen        = 256
+	maxNonceLen      = 128
+	b32, sigLen      = 32, 64
 )
 
 var b64 = base64.RawURLEncoding
@@ -374,7 +379,42 @@ func verifyB64u(pub string, msg []byte, sig string) bool {
 func CapHash(c map[string]any) (string, error) { return HashCanonical(c) }
 
 func bodyOf(c map[string]any) map[string]any {
-	return map[string]any{"issuer": c["issuer"], "holder": c["holder"], "caveats": c["caveats"], "parent": c["parent"]}
+	b := map[string]any{"issuer": c["issuer"], "holder": c["holder"], "caveats": c["caveats"], "parent": c["parent"]}
+	if hp, has := c["holder_pq"]; has {
+		b["holder_pq"] = hp
+	}
+	return b
+}
+
+const holderPqDomain = "atlas-pca/holder-pq/v1\x00"
+
+// holderPqCommitment mirrors holderPqCommitment in capability.ts: b64u(sha256(domain || utf8(pq_pk string))).
+func holderPqCommitment(pqPk string) string {
+	return b64.EncodeToString(sha(append([]byte(holderPqDomain), []byte(pqPk)...)))
+}
+
+func algName(alg any, present bool) string {
+	if !present {
+		return "ed25519"
+	}
+	if s, ok := alg.(string); ok {
+		return s
+	}
+	return "\x00non-string"
+}
+
+// suiteAllowed mirrors suitePolicyError: a nil policy allows everything; a present (even empty) list enforces.
+func suiteAllowed(alg any, present bool, allowed []string) bool {
+	if allowed == nil {
+		return true
+	}
+	n := algName(alg, present)
+	for _, a := range allowed {
+		if a == n {
+			return true
+		}
+	}
+	return false
 }
 
 func capSigMessage(bodyDigest string) ([]byte, error) {
@@ -406,7 +446,7 @@ func signableHopBody(c map[string]any) (map[string]any, bool) {
 	return body, true
 }
 
-func checkSig(c map[string]any, signer, label string) string {
+func checkSig(c map[string]any, signer, label string, key pqVerifyKey) string {
 	// Unknown suite => fail-closed (before any hashing), mirroring capability.ts checkSig.
 	body, ok := signableHopBody(c)
 	if !ok {
@@ -429,11 +469,13 @@ func checkSig(c map[string]any, signer, label string) string {
 	// hybrid requires BOTH the Ed25519 `sig` (under `signer`) AND the ML-DSA `pq_sig` (under `pq_pk`);
 	// pure ml-dsa-65 verifies `sig` under `pq_pk`. verifyLeafSuite dispatches on the hop's `alg`.
 	algV, present := c["alg"]
-	if !verifyLeafSuite(algV, present, signer, c["pq_pk"], msg, c["sig"], c["pq_sig"]) {
+	if !verifyLeafSuite(algV, present, signer, key, msg, c["sig"], c["pq_sig"]) {
 		return label + ": bad signature (not signed by expected key)"
 	}
 	return ""
 }
+
+func hasKey(m map[string]any, k string) bool { _, ok := m[k]; return ok }
 
 func wellTypedCap(c any) (map[string]any, bool) {
 	m, ok := c.(map[string]any)
@@ -445,9 +487,12 @@ func wellTypedCap(c any) (map[string]any, bool) {
 			return nil, false
 		}
 	}
-	if p, has := m["parent"]; has {
-		if _, ok := p.(string); !ok {
-			return nil, false
+	// optional fields: absent or a string (JSON null is NOT absent), like wellTyped in capability.ts (R6-05)
+	for _, k := range []string{"parent", "holder_pq", "alg", "pq_pk", "pq_sig"} {
+		if v, has := m[k]; has {
+			if _, ok := v.(string); !ok {
+				return nil, false
+			}
 		}
 	}
 	cav, ok := m["caveats"].([]any)
@@ -466,14 +511,87 @@ func wellTypedCap(c any) (map[string]any, bool) {
 	return m, true
 }
 
+// CaveatLimitReason is the shared reason string for the caveat caps (identical across all PCA verifiers).
+var CaveatLimitReason = fmt.Sprintf("chain exceeds caveat limit (max %d per hop, %d per chain)", MaxCaveatsPerHop, MaxCaveatsPerChain)
+
+// ArtifactSizeReason is the shared reason string for the PCActn raw-size cap.
+var ArtifactSizeReason = fmt.Sprintf("artifact exceeds size limit (max %d bytes)", MaxArtifactBytes)
+
+// caveatLimitExceeded reads raw list sizes only, so it runs before any hashing or signature work.
+func caveatLimitExceeded(chain []any) bool {
+	total := 0
+	for _, c := range chain {
+		m, ok := c.(map[string]any)
+		if !ok {
+			continue
+		}
+		cv, _ := m["caveats"].([]any)
+		if len(cv) > MaxCaveatsPerHop {
+			return true
+		}
+		total += len(cv)
+		if total > MaxCaveatsPerChain {
+			return true
+		}
+	}
+	return false
+}
+
+// rootPqAuthority picks the verifier-side authority for a non-ed25519 root's pq_pk: the stored grant (same content
+// hash as the root), else an own pin for root.issuer that equals root.pq_pk. (_, false) = no authority.
+func rootPqAuthority(root map[string]any, issuer string, pqPins map[string]string, trustedRoot map[string]any) (pqAuthority, bool) {
+	pk, isStr := root["pq_pk"].(string)
+	if !isStr {
+		return pqAuthority{}, false
+	}
+	if trustedRoot != nil {
+		th, e1 := CapHash(trustedRoot)
+		rh, e2 := CapHash(root)
+		if e1 == nil && e2 == nil && th == rh {
+			return pqAuthority{trustedPk: pk, hasTrusted: true}, true
+		}
+	}
+	if pin, own := pqPins[issuer]; own {
+		if pin == pk {
+			return pqAuthority{trustedPk: pin, hasTrusted: true}, true
+		}
+		return pqAuthority{}, false
+	}
+	return pqAuthority{}, false
+}
+
 // VerifyChain mirrors verifyChain in capability.ts. Returns ("", true) when valid. The hop cap is
 // enforced BEFORE any signature work.
+//
+// With no pins and no trusted root a non-ed25519 (ml-dsa-65 / hybrid) ROOT is refused (R4-01); use VerifyChainPolicy.
 func VerifyChain(chain []any, expectedRootIssuer string, haveIssuer bool) (string, bool) {
+	return VerifyChainPolicy(chain, expectedRootIssuer, haveIssuer, nil, nil, nil)
+}
+
+// VerifyChainPolicy is VerifyChain with an optional allowed-suites policy (nil = none; a present, even empty, list
+// enforces) and the root's PQ authority (R4-01, mirrors ChainPolicy.pqPins / trustedRoot in capability.ts).
+//
+//   - pqPins maps a root issuer (Ed25519, base64url) to the PQ public key (base64url) the VERIFIER pins for it.
+//   - trustedRoot is the verifier's own stored copy of the root capability.
+//
+// A non-ed25519 root hop is accepted only if trustedRoot has the same content hash as the root, or pqPins has an
+// entry for root.issuer equal to root.pq_pk (a differing pin is a refusal). The root's own pq_pk proves nothing
+// about who issued it. Ed25519 roots need neither.
+func VerifyChainPolicy(chain []any, expectedRootIssuer string, haveIssuer bool, allowed []string, pqPins map[string]string, trustedRoot map[string]any) (why string, ok bool) {
+	// TOTAL (R6-05): a hostile chain is a verdict, never a panic.
+	defer func() {
+		if r := recover(); r != nil {
+			why, ok = fmt.Sprintf("malformed capability chain: %v", r), false
+		}
+	}()
 	if len(chain) == 0 {
 		return "empty chain", false
 	}
 	if len(chain) > MaxChainHops {
 		return "chain too long", false
+	}
+	if caveatLimitExceeded(chain) {
+		return CaveatLimitReason, false
 	}
 	caps := make([]map[string]any, len(chain))
 	for i, c := range chain {
@@ -491,7 +609,24 @@ func VerifyChain(chain []any, expectedRootIssuer string, haveIssuer bool) (strin
 		return "hop 0: root issuer is not the expected principal", false
 	}
 	issuer, _ := root["issuer"].(string)
-	if e := checkSig(root, issuer, "hop 0"); e != "" {
+	if ra, rp := root["alg"], hasKey(root, "alg"); !suiteAllowed(ra, rp, allowed) {
+		return fmt.Sprintf("hop 0: signature suite '%s' is not allowed by this verifier's suite policy", algName(ra, rp)), false
+	}
+	// Root PQ authority (R3-01 / R4-01): AFTER the suite policy, BEFORE the signature.
+	var rootKey pqVerifyKey
+	{
+		ra, rp := root["alg"], hasKey(root, "alg")
+		if su, known := resolveSigAlg(ra, rp); known && su.needsPqPk {
+			auth, ok := rootPqAuthority(root, issuer, pqPins, trustedRoot)
+			if ok {
+				rootKey, ok = resolvePqVerifyKey(ra, rp, root["pq_pk"], auth)
+			}
+			if !ok {
+				return fmt.Sprintf("hop 0: root suite '%s' needs a PQ key pinned for the root issuer (policy.pqPins) or the verifier's stored grant (policy.trustedRoot); the root's own pq_pk proves nothing about who issued it (R3-01)", su.alg), false
+			}
+		}
+	}
+	if e := checkSig(root, issuer, "hop 0", rootKey); e != "" {
 		return e, false
 	}
 	for i := 1; i < len(caps); i++ {
@@ -505,7 +640,16 @@ func VerifyChain(chain []any, expectedRootIssuer string, haveIssuer bool) (strin
 			return label + ": issuer is not the parent's bound holder", false
 		}
 		ph2, _ := parent["holder"].(string)
-		if e := checkSig(c, ph2, label); e != "" {
+		ca, cp := c["alg"], hasKey(c, "alg")
+		if !suiteAllowed(ca, cp, allowed) {
+			return fmt.Sprintf("%s: signature suite '%s' is not allowed by this verifier's suite policy", label, algName(ca, cp)), false
+		}
+		phq, hasPhq := parent["holder_pq"]
+		hopKey, bound := resolvePqVerifyKey(ca, cp, c["pq_pk"], pqAuthority{holderPq: phq, hasHolderPq: hasPhq})
+		if !bound {
+			return label + ": pq_pk does not match the signer's committed holder_pq (F-2)", false
+		}
+		if e := checkSig(c, ph2, label, hopKey); e != "" {
 			return e, false
 		}
 		pc, _ := parent["caveats"].([]any)
@@ -679,7 +823,7 @@ func ValidateWireV2(pv any) (reason string) {
 		if !ok {
 			return fmt.Sprintf("cap_chain[%d] must be an object", i)
 		}
-		if k, ok := closedKeys(c, "id", "issuer", "holder", "body_digest", "caveats", "sig", "parent", "alg", "pq_pk", "pq_sig"); !ok {
+		if k, ok := closedKeys(c, "id", "issuer", "holder", "body_digest", "caveats", "sig", "parent", "alg", "pq_pk", "pq_sig", "holder_pq"); !ok {
 			return fmt.Sprintf("unknown field 'cap_chain[%d].%s'", i, k)
 		}
 		for _, k := range []string{"id", "issuer", "holder", "body_digest"} {
@@ -694,6 +838,9 @@ func ValidateWireV2(pv any) (reason string) {
 		}
 		if par, has := c["parent"]; has && !b64uOK(par, b32) {
 			return fmt.Sprintf("cap_chain[%d].parent is not canonical base64url (32 bytes)", i)
+		}
+		if hp, has := c["holder_pq"]; has && !b64uOK(hp, b32) {
+			return fmt.Sprintf("cap_chain[%d].holder_pq is not canonical base64url (32 bytes)", i)
 		}
 		cav, ok := c["caveats"].([]any)
 		if !ok {
@@ -822,6 +969,9 @@ func ThresholdMessage(p map[string]any) ([]byte, error) {
 
 // ParsePCActn strictly parses raw PCActn JSON text; a parse failure or non-object result is a wire failure.
 func ParsePCActn(text string) (map[string]any, error) {
+	if len(text) > MaxArtifactBytes { // Go strings are UTF-8 bytes: checked before any parsing
+		return nil, fmt.Errorf("%s", ArtifactSizeReason)
+	}
 	v, err := StrictParse(text)
 	if err != nil {
 		return nil, err
@@ -841,6 +991,12 @@ func WireFailure(why string) Verdict {
 // VerifyPCActnCore runs the normative check order: wire, version, audience, validity, chain,
 // grant_ref_bound, plan_inclusion, leaf_signature, counter. now is epoch milliseconds; audience is this verifier's own id.
 func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, audience string) (v Verdict, err error) {
+	return VerifyPCActnCorePolicy(pcactn, grant, now, audience, nil)
+}
+
+// VerifyPCActnCorePolicy is VerifyPCActnCore with an optional allowed-suites policy (nil = none; a present,
+// even empty, list refuses any hop or leaf suite not listed; absent alg == "ed25519").
+func VerifyPCActnCorePolicy(pcactn map[string]any, grant map[string]any, now int64, audience string, allowedSuites []string) (v Verdict, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			v = WireFailure(fmt.Sprintf("malformed PCActn: %v", r))
@@ -892,6 +1048,8 @@ func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, au
 		fail("chain", "empty chain")
 	} else if len(chain) > MaxChainHops {
 		fail("chain", "chain too long")
+	} else if caveatLimitExceeded(chain) {
+		fail("chain", CaveatLimitReason)
 	} else {
 		root, _ := chain[0].(map[string]any)
 		rh, e1 := CapHash(root)
@@ -900,7 +1058,7 @@ func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, au
 			fail("chain", "chain root is not the grant")
 		} else {
 			gi, hasI := grant["issuer"].(string)
-			if why, ok := VerifyChain(chain, gi, hasI); ok {
+			if why, ok := VerifyChainPolicy(chain, gi, hasI, allowedSuites, nil, grant); ok {
 				pass("chain")
 			} else {
 				fail("chain", why)
@@ -947,7 +1105,11 @@ func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, au
 		holder, _ := leafCap["holder"].(string)
 		alg, algPresent := pcactn["alg"]
 		msg, merr := ThresholdMessage(pcactn)
-		if merr == nil && verifyLeafSuite(alg, algPresent, holder, pcactn["pq_pk"], msg, pcactn["sig"], pcactn["pq_sig"]) {
+		hq, hasHq := leafCap["holder_pq"]
+		leafKey, bound := resolvePqVerifyKey(alg, algPresent, pcactn["pq_pk"], pqAuthority{holderPq: hq, hasHolderPq: hasHq})
+		if !suiteAllowed(alg, algPresent, allowedSuites) || !bound {
+			fail("leaf_signature", "signature suite not allowed or pq_pk not bound to the leaf holder_pq")
+		} else if merr == nil && verifyLeafSuite(alg, algPresent, holder, leafKey, msg, pcactn["sig"], pcactn["pq_sig"]) {
 			pass("leaf_signature")
 		} else {
 			fail("leaf_signature", "signature does not verify under the leaf holder key")

@@ -1,0 +1,352 @@
+[
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "binary - -> +",
+  "line": "for i := k.BitLen() - 1; i >= 0; i-- {",
+  "reason": "extra leading iterations only double the identity point, which is the identity: scalar multiplication result unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "binary >= -> >",
+  "line": "if leInt(sig[32:]).Cmp(edL) >= 0 { // non-canonical S",
+  "reason": "redundant with crypto/ed25519.Verify, which itself rejects S >= L (SetCanonicalBytes); the final verdict is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "if-cond -> false",
+  "line": "if leInt(sig[32:]).Cmp(edL) >= 0 { // non-canonical S",
+  "reason": "redundant with crypto/ed25519.Verify, which itself rejects S >= L (SetCanonicalBytes); the final verdict is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "int 0 -> 1",
+  "line": "if leInt(sig[32:]).Cmp(edL) >= 0 { // non-canonical S",
+  "reason": "redundant with crypto/ed25519.Verify, which itself rejects S >= L (SetCanonicalBytes); the final verdict is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "int 1 -> 0",
+  "line": "edSqrtM = new(big.Int).Exp(big.NewInt(2), new(big.Int).Rsh(new(big.Int).Sub(edP, big.NewInt(1)), 2), edP)",
+  "reason": "p = 5 mod 8 so floor(p/4) == (p-1)/4: changing the -1 to -0 leaves the exponent (p>>2) identical."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "int 1 -> 0",
+  "line": "for i := k.BitLen() - 1; i >= 0; i-- {",
+  "reason": "extra leading iterations only double the identity point, which is the identity: scalar multiplication result unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "int 32 -> +1",
+  "line": "if leInt(sig[32:]).Cmp(edL) >= 0 { // non-canonical S",
+  "reason": "redundant with crypto/ed25519.Verify, which itself rejects S >= L (SetCanonicalBytes); the final verdict is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "int 5 -> -1",
+  "line": "pw := new(big.Int).Exp(mm(u, v7), new(big.Int).Rsh(new(big.Int).Sub(edP, big.NewInt(5)), 3), edP)",
+  "reason": "p = 5 mod 8, so floor((p+1)/8) == (p-5)/8: the mutated exponent is identical."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "remove call statement",
+  "line": "negU.Mod(negU, edP)",
+  "reason": "negU = p-u with u in [1,p-1] on that path (u = 0 returns at the first comparison), so it is already reduced."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "remove call statement",
+  "line": "u.Mod(u, edP)",
+  "reason": "u is only negative for y = 0 (u = -1); the next comparison goes through negU (reduced) so decoding is unchanged, and mm() reduces u everywhere else."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "remove call statement",
+  "line": "v.Mod(v, edP)",
+  "reason": "v = d*y^2+1 reaches p only if d*y^2 = -1, which has no solution (-1/d is a non-square), so v is always already reduced; mm() reduces it anyway."
+ },
+ {
+  "crate": "go-pca",
+  "file": "ed25519strict.go",
+  "mutant": "remove call statement",
+  "line": "x.Mod(x, edP)",
+  "reason": "x is in [1,p-1] here (x = 0 with sign 1 is rejected above), so p-x is already reduced."
+ },
+ {
+  "crate": "go-pca",
+  "file": "middleware.go",
+  "mutant": "if-cond -> false",
+  "line": "if verr != nil {",
+  "reason": "VerifyPCActnCorePolicy never returns a non-nil error (its panic recovery converts to a wire-failure verdict), so the branch is unreachable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "middleware.go",
+  "mutant": "remove call statement",
+  "line": "writePCAError(w, http.StatusForbidden, \"verification_error\", verr.Error(), nil)",
+  "reason": "unreachable: VerifyPCActnCorePolicy never returns a non-nil error."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "assign false -> true",
+  "line": "v.Checks[\"chain\"] = false",
+  "reason": "every branch that follows sets the chain check explicitly."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "assign false -> true",
+  "line": "v.Checks[\"leaf_signature\"] = false",
+  "reason": "every branch that follows sets leaf_signature explicitly."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary % -> *",
+  "line": "if len(s)%4 == 1 {",
+  "reason": "a length = 1 mod 4 string is rejected by the base64 decoder itself."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary && -> ||",
+  "line": "if !(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {",
+  "reason": "alphabet pre-scan is redundant with the strict decode plus re-encode equality check that follows."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary + -> -",
+  "line": "m := make([]byte, 0, 1+len(l)+len(r))",
+  "reason": "only the initial slice capacity changes; append reallocates, contents identical."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary < -> <=",
+  "line": "for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {",
+  "reason": "swapping an element with itself (i == j) is a no-op."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok1 || !ok2 || size < 1 || index < 0 || index >= size {",
+  "reason": "ok2 false implies size = 0 (safeInt returns 0), which size < 1 also rejects; and size < 1 vs size < 0 is covered by index >= size since index >= 0."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary || -> &&",
+  "line": "if e1 != nil || e2 != nil || a != b {",
+  "reason": "A caveat hash error implies the hop signature check (which hashes the body including the caveats) already failed earlier, so || and && agree on every reachable input."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary || -> &&",
+  "line": "if e1 != nil || e2 != nil || rh != gh {",
+  "reason": "A hash error on either side implies the hashes differ unless both fail, in which case both forms reject: || and && agree on every reachable input."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "binary || -> &&",
+  "line": "if err != nil || b64.EncodeToString(b) != s {",
+  "reason": "err != nil implies the partial decode cannot re-encode to s, so || and && agree on every input."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "Five defensive type checks whose fall-through yields the identical verdict: VerifyInclusion step (non-object step becomes a nil map, side \"\" never equals L/R); verifyB64u pub/sig decode (nil bytes fail VerifyStrict's length check); wellTypedCap map assertion (nil map then fails the string-field checks); ValidateWireV2 attestation and risk_claim (nil map then fails the next field check with the same reason string)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> false",
+  "line": "if err != nil {",
+  "reason": "capSigMessage decodes a digest that checkSig has just verified equals the freshly computed base64url digest, so the decode cannot fail here (capSigMessage's own error is unit-tested)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> false",
+  "line": "if len(s)%4 == 1 {",
+  "reason": "a length = 1 mod 4 string is rejected by the base64 decoder itself."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> false",
+  "line": "if r := recover(); r != nil {",
+  "reason": "defensive recover: ValidateWireV2/VerifyPCActnCorePolicy cannot panic after their type checks; unreachable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> true",
+  "line": "if ok {",
+  "reason": "(1) VerifyChainPolicy: when the root PQ authority is missing, resolvePqVerifyKey is still called with the empty authority and refuses identically (same refusal message); (2) ValidateWireV2 threshold: a non-object threshold yields a nil map whose \"shares\" assertion fails, giving the same reason."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> true",
+  "line": "if suite.needsPqPk {",
+  "reason": "every suite other than ed25519 needs pq_pk, and this block only runs for non-ed25519 suites."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> true",
+  "line": "if trustedRoot != nil {",
+  "reason": "with a nil trustedRoot the hash of an empty map never equals the root hash, so the guard is redundant."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "int 0 -> 1",
+  "line": "for i := 0; i < len(s); i++ {",
+  "reason": "the alphabet pre-scan is redundant with the strict decode plus re-encode equality check that follows (any character outside A-Za-z0-9-_ makes decode fail or re-encode differ)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "int 1 -> 0",
+  "line": "if !ok1 || !ok2 || size < 1 || index < 0 || index >= size {",
+  "reason": "ok2 false implies size = 0 (safeInt returns 0), which size < 1 also rejects; and size < 1 vs size < 0 is covered by index >= size since index >= 0."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "int 1 -> 0",
+  "line": "m := make([]byte, 0, 1+len(l)+len(r))",
+  "reason": "only the initial slice capacity changes; append reallocates, contents identical."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "int 1 -> 2",
+  "line": "m := make([]byte, 0, 1+len(l)+len(r))",
+  "reason": "only the initial slice capacity changes; append reallocates, contents identical."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "int 64 -> +1",
+  "line": "f, err := strconv.ParseFloat(string(n), 64)",
+  "reason": "bitSize other than 32 is treated as 64 by ParseFloat: identical result."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "int 64 -> -1",
+  "line": "f, err := strconv.ParseFloat(string(n), 64)",
+  "reason": "bitSize other than 32 is treated as 64 by ParseFloat: identical result."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "int 64 -> -1",
+  "line": "i, err := strconv.ParseInt(s, 10, 64)",
+  "reason": "bitSize 63 vs 64 only matters above 2^62; numberLexemeError already limits the lexeme to 2^53-1."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "remove call statement",
+  "line": "fail(\"leaf_signature\", \"signature does not verify under the leaf holder key\")",
+  "reason": "Empty-chain branch: the chain check has already failed (failed=true) and leaf_signature is pre-initialised to false, so the call changes neither the verdict nor the first reason."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "binary || -> &&",
+  "line": "if len(pk) != mlDsaPublicKeyBytes || len(sig) != mlDsaSignatureBytes {",
+  "reason": "redundant with circl: UnmarshalBinary rejects a wrong-length key and Verify rejects a wrong-length signature."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "if-cond -> false",
+  "line": "if len(pk) != mlDsaPublicKeyBytes || len(sig) != mlDsaSignatureBytes {",
+  "reason": "redundant with circl: UnmarshalBinary rejects a wrong-length key and Verify rejects a wrong-length signature."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "return false -> true",
+  "line": "return false",
+  "reason": "Two unreachable returns: UnmarshalBinary of an exactly-1952-byte key cannot fail (circl only errors on length), and the switch in verifyLeafSuite is exhaustive over the closed suite registry."
+ },
+ {
+  "crate": "go-pca",
+  "file": "strictjson.go",
+  "mutant": "binary || -> &&",
+  "line": "if err != nil || math.IsInf(f, 0) || math.IsNaN(f) {",
+  "reason": "unreachable: a decimal with at most 15 significant digits and no exponent can neither fail ParseFloat nor be infinite/NaN."
+ },
+ {
+  "crate": "go-pca",
+  "file": "strictjson.go",
+  "mutant": "int 0 -> 1",
+  "line": "if err != nil || math.IsInf(f, 0) || math.IsNaN(f) {",
+  "reason": "unreachable: a decimal with at most 15 significant digits and no exponent can neither fail ParseFloat nor be infinite/NaN."
+ },
+ {
+  "crate": "go-pca",
+  "file": "strictjson.go",
+  "mutant": "int 0 -> 1",
+  "line": "if f != 0 && math.Abs(f) < 1e-6 {",
+  "reason": "f == 0 with a fractional lexeme is impossible: \"0.0...\" always ends in a zero, rejected earlier."
+ },
+ {
+  "crate": "go-pca",
+  "file": "strictjson.go",
+  "mutant": "int 0xE0 -> +1",
+  "line": "sb.WriteByte(0xE0 | byte(r>>12))",
+  "reason": "for surrogate code points r>>12 = 0xD, and 0xE1|0xD == 0xE0|0xD == 0xED."
+ },
+ {
+  "crate": "go-pca",
+  "file": "strictjson.go",
+  "mutant": "int 64 -> +1",
+  "line": "f, err := strconv.ParseFloat(lex, 64)",
+  "reason": "bitSize other than 32 is treated as 64 by ParseFloat."
+ },
+ {
+  "crate": "go-pca",
+  "file": "strictjson.go",
+  "mutant": "int 64 -> -1",
+  "line": "f, err := strconv.ParseFloat(lex, 64)",
+  "reason": "bitSize other than 32 is treated as 64 by ParseFloat."
+ },
+ {
+  "crate": "go-pca",
+  "file": "strictjson.go",
+  "mutant": "int 64 -> -1",
+  "line": "n, err := strconv.ParseInt(abs, 10, 64)",
+  "reason": "bitSize 63 vs 64 only matters above 2^62; the lexeme is at most 16 digits."
+ }
+]

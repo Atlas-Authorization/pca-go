@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -109,15 +110,22 @@ func TestVectors(t *testing.T) {
 			ctx := v["context"].(map[string]any)
 			var got Verdict
 			var err error
+			var allowed []string
+			if as, has := ctx["allowed_suites"].([]any); has {
+				allowed = make([]string, 0, len(as))
+				for _, a := range as {
+					allowed = append(allowed, a.(string))
+				}
+			}
 			if raw, ok := v["pcactn_json"].(string); ok {
 				p, perr := ParsePCActn(raw)
 				if perr != nil {
 					got = WireFailure(perr.Error())
 				} else {
-					got, err = VerifyPCActnCore(p, v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string))
+					got, err = VerifyPCActnCorePolicy(p, v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), allowed)
 				}
 			} else {
-				got, err = VerifyPCActnCore(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string))
+				got, err = VerifyPCActnCorePolicy(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), allowed)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -161,104 +169,7 @@ func sortedKeys(m map[string]int) []string {
 	return ks
 }
 
-// ---- v2.1 agent-leaf threshold-share binding (GAP 2) ---------------------------------
-
-const (
-	shareDomainPrefix = "atlas-pca/share/"
-	signersetDomain   = "atlas-pca/signerset/v1\x00"
-)
-
-// signerSetHash = sha256("atlas-pca/signerset/v1\0" || canonical(sort_by(role, publicKey)[{publicKey, role}])).
-// FAIL-CLOSED: (_, false) on any malformed entry, never panics.
-func signerSetHash(signerSet []any) ([]byte, bool) {
-	type ent struct{ role, pk string }
-	ents := make([]ent, 0, len(signerSet))
-	for _, e := range signerSet {
-		o, ok := e.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		role, ok := o["role"].(string)
-		if !ok {
-			return nil, false
-		}
-		pk, ok := o["publicKey"].(string)
-		if !ok {
-			return nil, false
-		}
-		ents = append(ents, ent{role, pk})
-	}
-	sort.Slice(ents, func(i, j int) bool {
-		if ents[i].role != ents[j].role {
-			return ents[i].role < ents[j].role
-		}
-		return ents[i].pk < ents[j].pk
-	})
-	arr := make([]any, len(ents))
-	for i, e := range ents {
-		arr[i] = map[string]any{"publicKey": e.pk, "role": e.role}
-	}
-	canon, err := Canonicalize(arr)
-	if err != nil {
-		return nil, false
-	}
-	return sha(append([]byte(signersetDomain), canon...)), true
-}
-
-// verifyThresholdShare verifies a single `primitives.threshold_share[]` entry under the v2.1 agent-leaf share
-// binding. RECOMPUTES the bound message from scratch (does not trust the stored `share_message`):
-//
-//	"atlas-pca/share/<role>\0" || sha256(thresholdMessage) || signerSetHash(signer_set) || t(1 byte)
-//
-// and confirms `share.sig` verifies over it under `share.publicKey` (routed through the SAME suite seam as the
-// leaf, so a PQ/hybrid share would use `share.pq_pk`/`share.pq_sig`). FAIL-CLOSED: false on any malformed
-// input, never panics. The PRE-v2.1 bare agent share (a `sig` over the bare threshold message) and a
-// cross-signer-set replay (a share bound to a DIFFERENT signer set) therefore both fail — the clean break the
-// v2.1 binding mandates.
-func verifyThresholdShare(entry map[string]any) bool {
-	role, ok := entry["role"].(string)
-	if !ok {
-		return false
-	}
-	ti, ok := safeInt(entry["t"])
-	if !ok || ti < 0 || ti > 255 {
-		return false
-	}
-	signerSet, ok := entry["signer_set"].([]any)
-	if !ok {
-		return false
-	}
-	tmStr, ok := entry["threshold_message"].(string)
-	if !ok {
-		return false
-	}
-	tm, ok := DecodeB64uStrict(tmStr, -1)
-	if !ok {
-		return false
-	}
-	ssh, ok := signerSetHash(signerSet)
-	if !ok {
-		return false
-	}
-	share, ok := entry["share"].(map[string]any)
-	if !ok {
-		return false
-	}
-	pk, ok := share["publicKey"].(string)
-	if !ok {
-		return false
-	}
-	// Bound share message: domain(role) || sha256(thresholdMessage) || signerSetHash || t.
-	msg := make([]byte, 0, len(shareDomainPrefix)+len(role)+1+32+len(ssh)+1)
-	msg = append(msg, shareDomainPrefix...)
-	msg = append(msg, role...)
-	msg = append(msg, 0)
-	msg = append(msg, sha(tm)...)
-	msg = append(msg, ssh...)
-	msg = append(msg, byte(ti))
-	algV, algPresent := share["alg"]
-	return verifyLeafSuite(algV, algPresent, pk, share["pq_pk"], msg, share["sig"], share["pq_sig"])
-}
+// ---- v2.1 agent-leaf threshold-share binding (GAP 2): library VerifyThresholdShare (threshold.go) ----
 
 func TestThresholdShares(t *testing.T) {
 	prim := load(t, "vectors.json")["primitives"].(map[string]any)
@@ -278,7 +189,7 @@ func TestThresholdShares(t *testing.T) {
 		if w, ok := s["valid"].(bool); ok {
 			want = w
 		}
-		got := verifyThresholdShare(s)
+		got := VerifyThresholdShare(s)
 		if got != want {
 			t.Errorf("%s: share verified = %v, want valid = %v", name, got, want)
 		}
@@ -332,7 +243,7 @@ func TestPQArtifact(t *testing.T) {
 			continue
 		}
 		edPub, _ := a["ed_pub"].(string)
-		got := verifyLeafSuite(alg, true, edPub, a["pq_pk"], msg, a["sig"], a["pq_sig"])
+		got := verifyLeafSuite(alg, true, edPub, callerVouchedPqKey(a["pq_pk"]), msg, a["sig"], a["pq_sig"])
 		want, _ := a["valid"].(bool)
 		if got != want {
 			t.Errorf("%s/%s: verified = %v, want %v", artifact, alg, got, want)
@@ -342,6 +253,67 @@ func TestPQArtifact(t *testing.T) {
 	t.Logf("pq artifacts: ran %d, skipped %d", ran, skipped)
 	for _, s := range sortedKeys(skippedBySuite) {
 		t.Logf("  skipped %d pq artifact(s) under unimplemented suite %q", skippedBySuite[s], s)
+	}
+}
+
+// TestChainPin runs the R4-01 shared vectors (primitives.chain_pin[]) against the standalone VerifyChainPolicy.
+func TestChainPin(t *testing.T) {
+	prim := load(t, "vectors.json")["primitives"].(map[string]any)
+	vecs, _ := prim["chain_pin"].([]any)
+	if len(vecs) < 25 {
+		t.Fatalf("chain_pin vectors: %d < 25", len(vecs))
+	}
+	ran, skipped := 0, 0
+	for _, vv := range vecs {
+		v := vv.(map[string]any)
+		name, _ := v["name"].(string)
+		chain, _ := v["chain"].([]any)
+		expect, _ := v["expect"].(map[string]any)
+		wantOK, _ := expect["ok"].(bool)
+		wantReason, _ := expect["reason"].(string)
+		pinReason := strings.HasPrefix(wantReason, "hop 0: root suite")
+		needsCrypto := wantOK || !pinReason
+		unsupported := false
+		for _, c := range chain {
+			if cm, ok := c.(map[string]any); ok {
+				if a := algOf(cm); a != "ed25519" && !supportedSuites[a] {
+					unsupported = true
+				}
+			}
+		}
+		if unsupported && needsCrypto {
+			skipped++
+			t.Logf("skip %s: suite not implemented", name)
+			continue
+		}
+		issuer, haveIssuer := v["expected_root_issuer"].(string)
+		var allowed []string
+		if al, ok := v["allowed_suites"].([]any); ok {
+			allowed = []string{}
+			for _, a := range al {
+				allowed = append(allowed, a.(string))
+			}
+		}
+		var pins map[string]string
+		if pm, ok := v["pq_pins"].(map[string]any); ok {
+			pins = map[string]string{}
+			for k, x := range pm {
+				pins[k], _ = x.(string)
+			}
+		}
+		trusted, _ := v["trusted_root"].(map[string]any)
+		why, ok := VerifyChainPolicy(chain, issuer, haveIssuer, allowed, pins, trusted)
+		if ok != wantOK {
+			t.Errorf("%s: ok = %v (%s), want %v", name, ok, why, wantOK)
+		}
+		if pinReason && why != wantReason {
+			t.Errorf("%s: reason %q, want %q", name, why, wantReason)
+		}
+		ran++
+	}
+	t.Logf("chain_pin: ran %d, skipped %d", ran, skipped)
+	if ran+skipped != len(vecs) {
+		t.Fatal("count mismatch")
 	}
 }
 

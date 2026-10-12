@@ -53,6 +53,56 @@ func resolveSigAlg(alg any, present bool) (sigSuite, bool) {
 	return su, known
 }
 
+// ---- the PQ key choke point (R3-01 / R4-01) -------------------------------------------
+
+// pqVerifyKey is the ONLY key type the suite verifier accepts for the ML-DSA half of a signature. Its field is
+// unexported and it is minted in exactly two places: resolvePqVerifyKey (the key is authorised by a verifier-side
+// source: the signer's committed holder_pq, a root PQ pin, or the verifier's stored grant) and
+// callerVouchedPqKey (explicitly named: the caller authorised the key elsewhere). The artifact's own pq_pk can
+// therefore never reach the PQ verify directly. (Go cannot make a same-package struct unconstructible; the rule is
+// that nothing outside this block builds a pqVerifyKey literal.)
+type pqVerifyKey struct{ pk any }
+
+// pqAuthority is where a PQ key gets its authority from. Exactly one of the two sources is used: when hasTrusted
+// the artifact key must equal trustedPk (a root pin or the verifier's stored grant); otherwise the key must hash
+// to the signer's committed holder_pq.
+type pqAuthority struct {
+	holderPq    any
+	hasHolderPq bool
+	trustedPk   string
+	hasTrusted  bool
+}
+
+// resolvePqVerifyKey mirrors resolvePqVerifyKey in pq.ts (strict, no allowUnboundPq). For a suite without a PQ
+// key it returns (zero key, true). For a suite that carries one it returns the key only if the artifact's pq_pk
+// is authorised by `auth`; otherwise (_, false).
+func resolvePqVerifyKey(alg any, present bool, artifactPk any, auth pqAuthority) (pqVerifyKey, bool) {
+	su, ok := resolveSigAlg(alg, present)
+	if !ok || !su.needsPqPk {
+		return pqVerifyKey{}, true
+	}
+	pk, isStr := artifactPk.(string)
+	if !isStr {
+		return pqVerifyKey{}, false
+	}
+	if auth.hasTrusted {
+		if pk != auth.trustedPk {
+			return pqVerifyKey{}, false
+		}
+		return pqVerifyKey{pk}, true
+	}
+	cs, ok := auth.holderPq.(string)
+	if !auth.hasHolderPq || !ok || holderPqCommitment(pk) != cs {
+		return pqVerifyKey{}, false
+	}
+	return pqVerifyKey{pk}, true
+}
+
+// callerVouchedPqKey wraps a key whose authority the CALLER established elsewhere (threshold shares carry their
+// own publicKey set, pq_artifact conformance primitives are checked against a stated key). Never use it on a
+// chain hop or the PCActn leaf: those go through resolvePqVerifyKey.
+func callerVouchedPqKey(pk any) pqVerifyKey { return pqVerifyKey{pk} }
+
 // ---- ML-DSA-65 verification -----------------------------------------------------------
 
 func mlDsa65VerifyRaw(pk, msg, sig []byte) bool {
@@ -66,8 +116,8 @@ func mlDsa65VerifyRaw(pk, msg, sig []byte) bool {
 	return mldsa65.Verify(&p, msg, nil, sig) // nil context == empty, matching @noble/post-quantum
 }
 
-func mlDsa65VerifyB64u(pkB64u any, msg []byte, sigB64u any) bool {
-	pks, ok := pkB64u.(string)
+func mlDsa65VerifyB64u(key pqVerifyKey, msg []byte, sigB64u any) bool {
+	pks, ok := key.pk.(string)
 	if !ok {
 		return false
 	}
@@ -128,7 +178,7 @@ func validateSignatureWire(p map[string]any) string {
 //   - ed25519:    Ed25519 `sig` under `holder`.
 //   - ml-dsa-65:  ML-DSA-65 `sig` under `pq_pk`.
 //   - hybrid:     Ed25519 `sig` under `holder` AND ML-DSA-65 `pq_sig` under `pq_pk`; BOTH must verify.
-func verifyLeafSuite(alg any, algPresent bool, holder string, pqPk any, msg []byte, sig any, pqSig any) bool {
+func verifyLeafSuite(alg any, algPresent bool, holder string, key pqVerifyKey, msg []byte, sig any, pqSig any) bool {
 	suite, ok := resolveSigAlg(alg, algPresent)
 	if !ok {
 		return false
@@ -141,13 +191,13 @@ func verifyLeafSuite(alg any, algPresent bool, holder string, pqPk any, msg []by
 	case "ed25519":
 		return verifyB64u(holder, msg, sigStr)
 	case "ml-dsa-65":
-		return mlDsa65VerifyB64u(pqPk, msg, sigStr)
+		return mlDsa65VerifyB64u(key, msg, sigStr)
 	case "hybrid-ed25519-ml-dsa-65":
 		pqSigStr, ok := pqSig.(string)
 		if !ok {
 			return false
 		}
-		return verifyB64u(holder, msg, sigStr) && mlDsa65VerifyB64u(pqPk, msg, pqSigStr)
+		return verifyB64u(holder, msg, sigStr) && mlDsa65VerifyB64u(key, msg, pqSigStr)
 	}
 	return false
 }

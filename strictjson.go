@@ -17,12 +17,18 @@ const (
 	maxSafeInt       = 9007199254740991
 )
 
+// MaxLenientDepth is the SAFETY cap of the lenient fixture loader (ParseJSONLenient): deep enough for every committed
+// vector (the corpus carries 100000-deep resource-exhaustion inputs), shallow enough that hostile depth is an error
+// instead of a fatal goroutine stack overflow (which recover() cannot catch).
+const MaxLenientDepth = 1 << 17
+
 // StrictParse parses signed bytes under the strict profile. Numbers are returned as json.Number
 // holding the (already validated, canonical) lexeme; objects as map[string]any; arrays as []any.
 func StrictParse(text string) (any, error) { return parseJSON(text, true) }
 
-// ParseJSONLenient is for loading trusted fixture files only (no size/depth/number limits; lone
-// surrogate escapes are kept as WTF-8 so that the verifier can detect them). Never use on untrusted input.
+// ParseJSONLenient is for loading trusted fixture files only (no size/number limits, depth capped only at the
+// MaxLenientDepth safety bound; lone surrogate escapes are kept as WTF-8 so that the verifier can detect them). Never
+// use on untrusted input.
 func ParseJSONLenient(data []byte) (any, error) { return parseJSON(string(data), false) }
 
 // ParseJSON strictly parses a JSON object (kept for API compatibility).
@@ -281,7 +287,7 @@ func (p *jparser) value(depth int) (any, error) {
 	}
 	switch c := p.s[p.i]; {
 	case c == '{':
-		if p.strict && depth > MaxJSONDepth {
+		if p.strict && depth > MaxJSONDepth || depth > MaxLenientDepth {
 			return nil, p.err("nesting too deep")
 		}
 		p.i++
@@ -325,7 +331,7 @@ func (p *jparser) value(depth int) (any, error) {
 			return nil, p.err(`expected "," or "}"`)
 		}
 	case c == '[':
-		if p.strict && depth > MaxJSONDepth {
+		if p.strict && depth > MaxJSONDepth || depth > MaxLenientDepth {
 			return nil, p.err("nesting too deep")
 		}
 		p.i++
