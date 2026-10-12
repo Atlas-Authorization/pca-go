@@ -31,15 +31,16 @@ func rawReq(body io.ReadCloser) *http.Request {
 	return &http.Request{Method: "POST", Header: http.Header{}, Body: body}
 }
 
-func TestMutDecodeB64u(t *testing.T) {
-	if b, ok := decodeB64u("YQ"); !ok || string(b) != "a" {
-		t.Fatalf("raw: %q %v", b, ok)
+// 0.4.1: the header decoder is strict (the lenient decodeB64u accepted padding and is gone).
+func TestMutDecodePCAHeader(t *testing.T) {
+	if s, err := DecodePCAHeader("YQ"); err != nil || s != "a" {
+		t.Fatalf("raw: %q %v", s, err)
 	}
-	if b, ok := decodeB64u("YQ=="); !ok || string(b) != "a" {
-		t.Fatalf("padded: %q %v", b, ok)
+	if s, err := DecodePCAHeader("YQ=="); err == nil || s != "" {
+		t.Fatalf("padded accepted: %q %v", s, err)
 	}
-	if b, ok := decodeB64u("Y"); ok || b != nil {
-		t.Fatalf("invalid: %q %v", b, ok)
+	if s, err := DecodePCAHeader("Y"); err == nil || s != "" {
+		t.Fatalf("invalid: %q %v", s, err)
 	}
 }
 
@@ -84,11 +85,21 @@ func TestMutExtractPCActn(t *testing.T) {
 			r.Header.Set(PCAHeader, "bm90IGpzb24")
 			return r
 		}, false, "PCA-Action header is not a valid PCActn JSON object", ""},
-		{"header ok padded", func() *http.Request {
+		{"header padded refused", func() *http.Request {
 			r := rawReq(nil)
-			r.Header.Set(PCAHeader, "eyJhIjoxfQ==") // {"a":1}
+			r.Header.Set(PCAHeader, "eyJhIjoxfQ==") // {"a":1}, padded: 0.4.1 strict
+			return r
+		}, false, "PCA-Action header is not valid base64url", ""},
+		{"header ok", func() *http.Request {
+			r := rawReq(nil)
+			r.Header.Set(PCAHeader, "eyJhIjoxfQ") // {"a":1}
 			return r
 		}, true, "", ""},
+		{"header invalid utf-8", func() *http.Request {
+			r := rawReq(nil)
+			r.Header.Set(PCAHeader, "__57") // FF FE 7B
+			return r
+		}, false, "PCA-Action header is not valid base64url", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

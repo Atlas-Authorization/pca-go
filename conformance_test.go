@@ -46,7 +46,8 @@ func algOf(o map[string]any) string {
 }
 
 // unsupportedSuite returns the concrete suite a vector exercises that Go does NOT implement, if any: the leaf
-// `alg` for requires:"pq", or the first non-ed25519 capability-hop `alg` for requires:"pq-nonleaf". Returns
+// `alg` for requires:"pq", the first non-ed25519 capability-hop `alg` for requires:"pq-nonleaf", or the suite a
+// requires:"<alg>" vector names directly (0.4.1 share vectors). Returns
 // ("", false) for core vectors and for vectors that stay entirely within supportedSuites.
 func unsupportedSuite(v map[string]any) (string, bool) {
 	p, ok := v["pcactn"].(map[string]any)
@@ -54,6 +55,7 @@ func unsupportedSuite(v map[string]any) (string, bool) {
 		return "", false // raw-json (wire) vectors and core vectors carry no PQ suite
 	}
 	switch v["requires"] {
+	case nil, "":
 	case "pq":
 		if a := algOf(p); !supportedSuites[a] {
 			return a, true
@@ -67,6 +69,12 @@ func unsupportedSuite(v map[string]any) (string, bool) {
 					}
 				}
 			}
+		}
+	default:
+		// 0.4.1: `requires` may name a concrete suite directly (e.g. a threshold share under ml-dsa-87 or
+		// slh-dsa-sha2-128f, which wire now validates per suite). Skip it when Go does not implement that suite.
+		if s, ok := v["requires"].(string); ok && !supportedSuites[s] {
+			return s, true
 		}
 	}
 	return "", false

@@ -12,12 +12,13 @@ package pca
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+	"unicode/utf8"
 )
 
 // PCAHeader is the request header carrying a base64url(JSON) PCActn.
@@ -54,28 +55,38 @@ func FromContext(ctx context.Context) (*Verdict, map[string]any, bool) {
 	return cv.verdict, cv.pcactn, true
 }
 
-// decodeB64u accepts either the raw (unpadded) or padded base64url alphabet.
-func decodeB64u(s string) ([]byte, bool) {
-	if b, err := base64.RawURLEncoding.DecodeString(s); err == nil {
-		return b, true
+// ErrPCAHeader is returned by DecodePCAHeader for a value that is not strict unpadded base64url of UTF-8 text.
+var ErrPCAHeader = errors.New("PCA-Action header is not strict unpadded base64url of UTF-8 text")
+
+// DecodePCAHeader reverses the PCA-Action header encoding: header value -> the encoded PCActn JSON text.
+//
+// STRICT (0.4.1), exactly the profile's base64url rule: non-empty; unpadded RFC 4648 section 5 alphabet only
+// (A-Z a-z 0-9 - _), no '=', no '+' or '/', no whitespace anywhere (nothing is trimmed), length mod 4 != 1,
+// zero unused trailing bits; then the bytes must be valid UTF-8 (no overlong forms, surrogates or truncated
+// sequences). A leading BOM is kept (the strict JSON parser then refuses it). Nothing is normalized, so one
+// PCActn has exactly one header spelling. Any failure returns ("", ErrPCAHeader).
+func DecodePCAHeader(value string) (string, error) {
+	if value == "" {
+		return "", ErrPCAHeader
 	}
-	if b, err := base64.URLEncoding.DecodeString(s); err == nil {
-		return b, true
+	b, ok := DecodeB64uStrict(value, -1)
+	if !ok || !utf8.Valid(b) {
+		return "", ErrPCAHeader
 	}
-	return nil, false
+	return string(b), nil
 }
 
-// extractPCActn pulls the PCActn from the PCA-Action header (base64url -> JSON) or, failing a header,
+// extractPCActn pulls the PCActn from the PCA-Action header (strict base64url -> JSON, see DecodePCAHeader) or, failing a header,
 // from a JSON request body of the shape {"pcactn": {...}}. Reading the body is non-destructive: it is
 // buffered and restored so downstream handlers still see it. The returned reason is only meaningful
 // when ok is false.
 func extractPCActn(r *http.Request) (pcactn map[string]any, reason string, ok bool) {
 	if h := r.Header.Get(PCAHeader); h != "" {
-		raw, dok := decodeB64u(h)
-		if !dok {
+		raw, derr := DecodePCAHeader(h)
+		if derr != nil {
 			return nil, "PCA-Action header is not valid base64url", false
 		}
-		p, err := ParsePCActn(string(raw))
+		p, err := ParsePCActn(raw)
 		if err != nil {
 			return nil, "PCA-Action header is not a valid PCActn JSON object", false
 		}

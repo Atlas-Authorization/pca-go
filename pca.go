@@ -939,8 +939,10 @@ func ValidateWireV2(pv any) (reason string) {
 			if !b64uOK(s["publicKey"], b32) {
 				return fmt.Sprintf("threshold.shares[%d].publicKey is not canonical base64url (32 bytes)", i)
 			}
-			if !b64uOK(s["sig"], sigLen) {
-				return fmt.Sprintf("threshold.shares[%d].sig is not canonical base64url (64 bytes)", i)
+			// 0.4.1: the share signature is validated PER SUITE (it used to be a fixed 64 bytes, so a pure
+			// post-quantum share could never be carried).
+			if why := validateShareSignatureWire(s); why != "" {
+				return fmt.Sprintf("threshold.shares[%d]: %s", i, why)
 			}
 		}
 	}

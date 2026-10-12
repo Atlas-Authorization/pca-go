@@ -141,7 +141,15 @@ func mlDsa65VerifyB64u(key pqVerifyKey, msg []byte, sigB64u any) bool {
 // validateSignatureWire validates `alg`/`sig`/`pq_pk`/`pq_sig` per suite. Returns "" when well-formed,
 // else a short reason. Strict + fail-closed: unknown alg, wrong sizes, or a field not used by the suite
 // being present, all fail.
-func validateSignatureWire(p map[string]any) string {
+func validateSignatureWire(p map[string]any) string { return validateSuiteFields(p, true) }
+
+// validateShareSignatureWire (0.4.1) applies the same per-suite rules to a threshold share: `alg` absent ==
+// ed25519 (64-byte `sig`, no `pq_sig`), else a registered suite's lengths (ml-dsa-65: 3309-byte `sig`; hybrid:
+// 64-byte `sig` + 3309-byte `pq_sig`). A share's `pq_pk` is NOT judged here: it is an optional echo checked by
+// the threshold verifier against the signer set. Mirrors validateShareSignatureWire in packages/pca/src/pq.ts.
+func validateShareSignatureWire(s map[string]any) string { return validateSuiteFields(s, false) }
+
+func validateSuiteFields(p map[string]any, checkPqPk bool) string {
 	algV, algPresent := p["alg"]
 	suite, ok := resolveSigAlg(algV, algPresent)
 	if !ok {
@@ -153,7 +161,9 @@ func validateSignatureWire(p map[string]any) string {
 	if !b64uOK(p["sig"], suite.sigBytes) {
 		return fmt.Sprintf("'sig' is not canonical base64url (%d bytes) for alg '%s'", suite.sigBytes, suite.alg)
 	}
-	if _, present := p["pq_pk"]; suite.needsPqPk {
+	if !checkPqPk {
+		// share: `pq_pk` is an optional echo, judged by the threshold check against the signer set
+	} else if _, present := p["pq_pk"]; suite.needsPqPk {
 		if !b64uOK(p["pq_pk"], mlDsaPublicKeyBytes) {
 			return fmt.Sprintf("'pq_pk' is not canonical base64url (%d bytes)", mlDsaPublicKeyBytes)
 		}
