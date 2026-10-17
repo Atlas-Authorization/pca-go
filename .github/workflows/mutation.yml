@@ -1,0 +1,92 @@
+name: Mutation
+
+# Mutation testing of the verifier (every non-test .go file) with go-mutate (flagship tools/pca-audit/go-mutate), split
+# into shards on separate runners. The merge job checks the survivors against the equivalent-mutant ledger
+# (native-check-equivalents.mjs): it passes when every survivor is a ledgered equivalent and no ledger entry is stale.
+# Runs on demand and on ci/** branches (the release-candidate check), never on main pushes.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['ci/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CRATE: go-pca
+  SHARDS: '8'
+
+jobs:
+  shard:
+    name: shard ${{ matrix.shard }}/8
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Flagship tooling
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: Mutate
+        run: |
+          (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate" .)
+          # a mutant that allocates without bound must die alone (killed), not exhaust the runner: 4 GiB address space per
+          # process, 3 mutants at a time
+          ulimit -v 4194304
+          # -tags less: the same build as ci.yml (cgo + the module's lessc/ copy). Without it less_cgo.go is never compiled
+          # (all its mutants "survive" untested) and the LESS known answers (less_cgo_test.go) never run against pq.go.
+          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -shard "$(( ${{ matrix.shard }} - 1 ))/$SHARDS" -j 3 -timeout 300s \
+            -out "$RUNNER_TEMP/raw.json" | tail -40
+      - name: Report
+        run: |
+          node -e '
+            const fs = require("fs"); const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8")) || [];
+            const counts = {}; for (const m of raw) counts[m.status] = (counts[m.status] || 0) + 1;
+            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
+            if (raw.some((m) => !m.status)) { console.error("unfinished mutants in the shard"); process.exit(1); }
+            fs.writeFileSync("counts.json", JSON.stringify(counts)); fs.writeFileSync("survivors.json", JSON.stringify(surv));
+          ' "$RUNNER_TEMP/raw.json"
+          node .github/scripts/mutation-shard-report.mjs --crate="$CRATE" --shard=${{ matrix.shard }} --of="$SHARDS" --tool=go-mutate \
+            --counts=counts.json --survivors=survivors.json --out=shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.json
+
+  merge:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Flagship checker + ledger
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - uses: actions/download-artifact@v4
+        with:
+          path: reports
+      - name: Merge shards and check the ledger
+        run: >
+          node .github/scripts/mutation-merge.mjs --crate="$CRATE" --shards="$SHARDS" --reports=reports
+          --checker="$MONO/tools/pca-audit" --src="$GITHUB_WORKSPACE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: survivors-merged
+          path: reports/survivors-merged.json
+          if-no-files-found: ignore

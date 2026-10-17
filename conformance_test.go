@@ -25,18 +25,16 @@ func load(t *testing.T, name string) map[string]any {
 
 func num(v any) int64 { i, _ := safeInt(v); return i }
 
-// supportedSuites are the signature suites this Go verifier implements for a GENUINE crypto verdict — on the
-// leaf signature (requires:"pq"), on non-leaf capability-chain hops (requires:"pq-nonleaf"), the threshold
-// share binding, and the PQ transparency artifacts. These are the three CROSS-IMPL suites every conformant
-// verifier must agree on: classical Ed25519, pure lattice ML-DSA-65 (FIPS-204, via cloudflare/circl), and the
-// hybrid Ed25519 + ML-DSA-65. The other 7 registered suites (ml-dsa-87, slh-dsa-sha2-128f/256s, their hybrids,
-// and the SUF-CMA nested hybrid) are NOT wired in Go, so vectors needing a real signature verdict under them
-// are skipped EXPLICITLY — never silently passed.
-var supportedSuites = map[string]bool{
-	"ed25519":                  true,
-	"ml-dsa-65":                true,
-	"hybrid-ed25519-ml-dsa-65": true,
-}
+// supportedSuites is this verifier's capability manifest (SupportedSuites(): every registered suite Go implements,
+// see packages/pca/conformance/SUITES.md). A vector that needs a suite outside it is not skipped: the verifier must
+// refuse it with the distinct reason unsupported_suite (asserted in TestVectors).
+var supportedSuites = func() map[string]bool {
+	m := map[string]bool{}
+	for _, a := range SupportedSuites() {
+		m[a] = true
+	}
+	return m
+}()
 
 func algOf(o map[string]any) string {
 	if s, ok := o["alg"].(string); ok {
@@ -111,9 +109,25 @@ func TestVectors(t *testing.T) {
 		// SUITE-AWARE skip: only skip a vector whose expected verdict needs a real crypto verdict under a
 		// suite Go does not implement. A terminal {wire:false} negative is run regardless.
 		if suite, bad := unsupportedSuite(v); bad && !terminalWireFalse(ec) {
+			// Suite capability rule: a registered suite this verifier does not implement fails closed with
+			// unsupported_suite (counted, never silently passed).
 			skippedBySuite[suite]++
+			t.Run(name+"/unsupported_suite", func(t *testing.T) {
+				ctx := v["context"].(map[string]any)
+				got, err := VerifyPCActnCore(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got.Allow || !strings.Contains(got.Reason, UnsupportedSuite) {
+					t.Errorf("suite %q: allow=%v reason=%q, want a refusal with %s", suite, got.Allow, got.Reason, UnsupportedSuite)
+				}
+			})
 			continue
 		}
+		// Intent Layer v2 (README "suite capability"): a vector whose artifacts need a suite this build does not
+		// implement must FAIL with unsupported_suite (never skipped, never accepted).
+		requiredSuite, needsSuite := v["requires_suite"].(string)
+		mustRefuse := needsSuite && !suiteSupported(requiredSuite, true)
 		t.Run(name, func(t *testing.T) {
 			ctx := v["context"].(map[string]any)
 			var got Verdict
@@ -125,18 +139,39 @@ func TestVectors(t *testing.T) {
 					allowed = append(allowed, a.(string))
 				}
 			}
+			// Intent Layer M2: `intent-*` vectors may carry context.intent_policy (lenient; misconfig fails closed).
+			// context.intent_policy_json (raw JSON text, keeps 950000.0 / 1e6 / -0.0) wins over context.intent_policy.
+			// Intent Layer v2: context.intent_v2 is the verifier state of the schema-* / session-* / acc-* / layers-*
+			// vectors (absent = none).
+			opts := VerifyOptions{AllowedSuites: allowed, Intent: IntentPolicyFromJSON(ctx["intent_policy"]), IntentV2: IntentV2ContextFromJSON(ctx["intent_v2"])}
+			if text, ok := ctx["intent_policy_json"].(string); ok {
+				ip, perr := IntentPolicyFromJSONText(text)
+				if perr != nil {
+					t.Fatalf("intent_policy_json: %v", perr)
+				}
+				opts.Intent = ip
+			}
 			if raw, ok := v["pcactn_json"].(string); ok {
 				p, perr := ParsePCActn(raw)
 				if perr != nil {
 					got = WireFailure(perr.Error())
 				} else {
-					got, err = VerifyPCActnCorePolicy(p, v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), allowed)
+					got, err = VerifyPCActnCoreWith(p, v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), opts)
 				}
 			} else {
-				got, err = VerifyPCActnCorePolicy(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), allowed)
+				got, err = VerifyPCActnCoreWith(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), opts)
 			}
 			if err != nil {
 				t.Fatal(err)
+			}
+			if mustRefuse {
+				if got.Allow || !strings.Contains(got.Reason, UnsupportedSuite) {
+					t.Errorf("requires_suite %q: allow=%v reason=%q, want a refusal with %s", requiredSuite, got.Allow, got.Reason, UnsupportedSuite)
+				}
+				return
+			}
+			if rc, ok := exp["reason_contains"].(string); ok && !strings.Contains(got.Reason, rc) {
+				t.Errorf("reason %q does not contain %q", got.Reason, rc)
 			}
 			ok := true
 			if got.Allow != exp["allow"].(bool) {
@@ -198,6 +233,13 @@ func TestThresholdShares(t *testing.T) {
 			want = w
 		}
 		got := VerifyThresholdShare(s)
+		// Suite capability: an entry whose `requires` suite Go lacks is not compared; it must be refused.
+		if req, ok := s["requires"].(string); ok && !supportedSuites[req] {
+			if got {
+				t.Errorf("%s: share under unsupported suite %s verified (want fail closed)", name, req)
+			}
+			continue
+		}
 		if got != want {
 			t.Errorf("%s: share verified = %v, want valid = %v", name, got, want)
 		}

@@ -1,0 +1,38 @@
+name: CI
+
+# Build + unit tests + the shared conformance corpus (conformance/vectors.json, run by conformance_test.go).
+on:
+  push:
+    branches: [main, 'ci/**']
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      # the corpus and test-data are byte-exact: no CRLF conversion on Windows
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build ./...
+      # -tags less: the LESS suites through cgo and the module's copy of the patched reference C (lessc/); not on Windows
+      - name: Unit tests + conformance corpus
+        shell: bash
+        run: go test -count=1 $([ "$RUNNER_OS" = Windows ] || echo -tags less) ./...

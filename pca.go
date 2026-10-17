@@ -450,6 +450,9 @@ func checkSig(c map[string]any, signer, label string, key pqVerifyKey) string {
 	// Unknown suite => fail-closed (before any hashing), mirroring capability.ts checkSig.
 	body, ok := signableHopBody(c)
 	if !ok {
+		if isRegisteredSuite(c["alg"]) {
+			return label + ": " + unsupportedSuiteReason(c["alg"])
+		}
 		return fmt.Sprintf("%s: unknown signature alg '%v'", label, c["alg"])
 	}
 	digest, err := HashCanonical(body)
@@ -537,19 +540,40 @@ func caveatLimitExceeded(chain []any) bool {
 	return false
 }
 
+// rootIsTrusted: trustedRoot is the verifier's stored copy of this very root (same content hash).
+func rootIsTrusted(root map[string]any, trustedRoot map[string]any) bool {
+	if trustedRoot == nil {
+		return false
+	}
+	th, e1 := CapHash(trustedRoot)
+	rh, e2 := CapHash(root)
+	return e1 == nil && e2 == nil && th == rh
+}
+
+// rootPinMismatch: the root is the stored grant but a supplied pin for its issuer names a different PQ key.
+func rootPinMismatch(root map[string]any, issuer string, pqPins map[string]string, trustedRoot map[string]any) bool {
+	pk, isStr := root["pq_pk"].(string)
+	if !isStr || !rootIsTrusted(root, trustedRoot) {
+		return false
+	}
+	pin, own := pqPins[issuer]
+	return own && pin != pk
+}
+
 // rootPqAuthority picks the verifier-side authority for a non-ed25519 root's pq_pk: the stored grant (same content
-// hash as the root), else an own pin for root.issuer that equals root.pq_pk. (_, false) = no authority.
+// hash as the root; a supplied pin for root.issuer must then agree), else an own pin for root.issuer that equals root.pq_pk.
+// (_, false) = no authority.
 func rootPqAuthority(root map[string]any, issuer string, pqPins map[string]string, trustedRoot map[string]any) (pqAuthority, bool) {
 	pk, isStr := root["pq_pk"].(string)
 	if !isStr {
 		return pqAuthority{}, false
 	}
-	if trustedRoot != nil {
-		th, e1 := CapHash(trustedRoot)
-		rh, e2 := CapHash(root)
-		if e1 == nil && e2 == nil && th == rh {
-			return pqAuthority{trustedPk: pk, hasTrusted: true}, true
+	if rootIsTrusted(root, trustedRoot) {
+		// 0.4.2 fail closed: a supplied pin for the issuer must agree with the stored grant (never overridden by it).
+		if pin, own := pqPins[issuer]; own && pin != pk {
+			return pqAuthority{}, false
 		}
+		return pqAuthority{trustedPk: pk, hasTrusted: true}, true
 	}
 	if pin, own := pqPins[issuer]; own {
 		if pin == pk {
@@ -621,6 +645,9 @@ func VerifyChainPolicy(chain []any, expectedRootIssuer string, haveIssuer bool, 
 			if ok {
 				rootKey, ok = resolvePqVerifyKey(ra, rp, root["pq_pk"], auth)
 			}
+			if !ok && rootPinMismatch(root, issuer, pqPins, trustedRoot) {
+				return fmt.Sprintf("hop 0: root suite '%s': the server-side PQ pin for the root issuer (policy.pqPins) does not match the stored grant's pq_pk (fail closed)", su.alg), false
+			}
 			if !ok {
 				return fmt.Sprintf("hop 0: root suite '%s' needs a PQ key pinned for the root issuer (policy.pqPins) or the verifier's stored grant (policy.trustedRoot); the root's own pq_pk proves nothing about who issued it (R3-01)", su.alg), false
 			}
@@ -675,7 +702,11 @@ var requiredFields = []string{"ver", "action", "grant_ref", "cap_chain", "plan",
 var optionalFields = []string{"nonce", "caution", "rationale_commitment", "progress_step", "prohibition_evidence",
 	"tool_binding", "threshold", "zk_compliance", "bond_ref",
 	// B4 crypto-agility (additive): absent `alg` == "ed25519" and validates exactly as today.
-	"alg", "pq_pk", "pq_sig"}
+	"alg", "pq_pk", "pq_sig",
+	// Intent Layer M2 (additive, SIGNED): the `envelope.intent` binding (intent.go).
+	"intent",
+	// Intent Layer v2 (additive, SIGNED): the `intent_session` member (intent_session.go, rule 13).
+	"intent_session"}
 
 func isObj(v any) (map[string]any, bool) { m, ok := v.(map[string]any); return m, ok }
 func isStr(v any) bool                   { _, ok := v.(string); return ok }
@@ -915,6 +946,16 @@ func ValidateWireV2(pv any) (reason string) {
 			return "'progress_step' must be an object"
 		}
 	}
+	if v, has := p["intent"]; has {
+		if e := validateIntentWire(v); e != "" {
+			return e
+		}
+	}
+	if v, has := p["intent_session"]; has {
+		if e := validateIntentSessionWire(v); e != "" {
+			return e
+		}
+	}
 	if v, has := p["prohibition_evidence"]; has {
 		_, o := isObj(v)
 		_, a := v.([]any)
@@ -991,7 +1032,7 @@ func WireFailure(why string) Verdict {
 }
 
 // VerifyPCActnCore runs the normative check order: wire, version, audience, validity, chain,
-// grant_ref_bound, plan_inclusion, leaf_signature, counter. now is epoch milliseconds; audience is this verifier's own id.
+// grant_ref_bound, plan_inclusion, leaf_signature, counter (then `intent` when the PCActn carries it). now is epoch milliseconds; audience is this verifier's own id.
 func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, audience string) (v Verdict, err error) {
 	return VerifyPCActnCorePolicy(pcactn, grant, now, audience, nil)
 }
@@ -999,6 +1040,23 @@ func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, au
 // VerifyPCActnCorePolicy is VerifyPCActnCore with an optional allowed-suites policy (nil = none; a present,
 // even empty, list refuses any hop or leaf suite not listed; absent alg == "ed25519").
 func VerifyPCActnCorePolicy(pcactn map[string]any, grant map[string]any, now int64, audience string, allowedSuites []string) (v Verdict, err error) {
+	return VerifyPCActnCoreWith(pcactn, grant, now, audience, VerifyOptions{AllowedSuites: allowedSuites})
+}
+
+// VerifyOptions are the optional verifier policies of VerifyPCActnCoreWith (the zero value == VerifyPCActnCore).
+type VerifyOptions struct {
+	// AllowedSuites: nil = no restriction; a present (even empty) list refuses any hop or leaf suite not listed.
+	AllowedSuites []string
+	// Intent is the Intent Layer M2 policy (nil = none). See IntentPolicy.
+	Intent *IntentPolicy
+	// IntentV2 is the Intent Layer v2 verifier state and policy (nil = none). See IntentV2Context.
+	IntentV2 *IntentV2Context
+}
+
+// VerifyPCActnCoreWith is VerifyPCActnCore with explicit options. The `intent` check runs after `counter` and is
+// reported iff the PCActn carries `intent` or opts.Intent is active; otherwise the verdict is the pre-M2 one.
+func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64, audience string, opts VerifyOptions) (v Verdict, err error) {
+	allowedSuites := opts.AllowedSuites
 	defer func() {
 		if r := recover(); r != nil {
 			v = WireFailure(fmt.Sprintf("malformed PCActn: %v", r))
@@ -1124,6 +1182,25 @@ func VerifyPCActnCorePolicy(pcactn map[string]any, grant map[string]any, now int
 		pass("counter")
 	} else {
 		fail("counter", "missing or not a non-negative safe integer")
+	}
+
+	// Intent Layer M2: `intent` (reported iff the PCActn carries `intent` or the policy is active). With a wire-valid
+	// `intent_session` the goal is the v2 session goal (rule 13 amends rule 12 step 2).
+	if evaluated, why := decideIntent(pcactn, grant, opts.Intent); evaluated {
+		if why == "" {
+			pass("intent")
+		} else {
+			fail("intent", why)
+		}
+	}
+	// Intent Layer v2: schema, intent_session, layers, accumulators, facts, provenance, classes (intent_v2.go), each
+	// reported only under its condition.
+	for _, c := range decideIntentV2(pcactn, grant, opts.IntentV2, float64(now)).checks {
+		if c.ok {
+			pass(c.name)
+		} else {
+			fail(c.name, c.why)
+		}
 	}
 
 	v.Allow = !failed

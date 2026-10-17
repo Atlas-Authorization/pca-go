@@ -144,12 +144,23 @@ func TestMutRootPqAuthority(t *testing.T) {
 	if _, ok := rootPqAuthority(root, iss.id, nil, diff); ok {
 		t.Fatal("different stored grant")
 	}
-	// a differing stored grant does not hide a correct pin, and a correct stored grant beats a wrong pin
+	// a differing stored grant does not hide a correct pin; with the stored grant AND a pin, both must agree (0.4.2:
+	// the stored grant never overrides a disagreeing pin)
 	if _, ok := rootPqAuthority(root, iss.id, map[string]string{iss.id: pq.b64}, diff); !ok {
 		t.Fatal("pin should still apply")
 	}
-	if _, ok := rootPqAuthority(root, iss.id, map[string]string{iss.id: other.b64}, root); !ok {
-		t.Fatal("stored grant beats wrong pin")
+	if _, ok := rootPqAuthority(root, iss.id, map[string]string{iss.id: other.b64}, root); ok {
+		t.Fatal("a wrong pin must refuse even for the stored grant")
+	}
+	if _, ok := rootPqAuthority(root, iss.id, map[string]string{iss.id: pq.b64}, root); !ok {
+		t.Fatal("stored grant and an agreeing pin")
+	}
+	if _, ok := rootPqAuthority(root, iss.id, map[string]string{holder.id: other.b64}, root); !ok {
+		t.Fatal("a pin for another issuer does not bear on the stored grant")
+	}
+	if !rootPinMismatch(root, iss.id, map[string]string{iss.id: other.b64}, root) || rootPinMismatch(root, iss.id, map[string]string{iss.id: pq.b64}, root) ||
+		rootPinMismatch(root, iss.id, map[string]string{iss.id: other.b64}, diff) || rootPinMismatch(root, iss.id, nil, root) {
+		t.Fatal("rootPinMismatch")
 	}
 	bad := deepM(t, root)
 	bad["caveats"] = []any{map[string]any{"type": "\xed\xa0\x80"}}
