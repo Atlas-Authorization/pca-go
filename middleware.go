@@ -39,10 +39,16 @@ type contextValue struct {
 //   - ResolveGrant maps a PCActn's grant_ref to the root grant capability (the chain is rooted at it).
 //     Returning an error or a nil grant is treated as an unknown grant (HTTP 401).
 //   - Now returns the current time in epoch milliseconds; nil defaults to time.Now().UnixMilli().
+//   - Intent is the optional Intent Layer M2 policy (nil = none; see IntentPolicy).
+//   - IntentV2 optionally returns the Intent Layer v2 verifier state for this request (plaintext params, accepted
+//     schemas, session root and grants, accumulator state, layers, W-B artifacts and policy); nil = none. See
+//     IntentV2Context.
 type RequirePCAOptions struct {
 	Audience     string
 	ResolveGrant func(grantRef string) (map[string]any, error)
 	Now          func() int64
+	Intent       *IntentPolicy
+	IntentV2     func(r *http.Request, pcactn map[string]any) *IntentV2Context
 }
 
 // FromContext returns the Verdict and the verified PCActn stashed by a passing RequirePCA
@@ -123,11 +129,23 @@ func extractPCActn(r *http.Request) (pcactn map[string]any, reason string, ok bo
 	return p, "", true
 }
 
-// writePCAError writes a JSON error body plus an RFC-6750-shaped WWW-Authenticate challenge.
+// writePCAError writes a JSON error body plus an RFC-6750-shaped WWW-Authenticate challenge. desc MUST be one of the
+// guard's own fixed strings: it is echoed into the challenge header. Request-derived text (a verdict reason, a verifier
+// error) goes through writePCAErrorReason instead.
 func writePCAError(w http.ResponseWriter, status int, code, desc string, verdict *Verdict) {
+	writePCAErr(w, status, code, desc, desc, verdict)
+}
+
+// writePCAErrorReason is writePCAError for a request-derived reason: the reason is surfaced only in the JSON body
+// (encoded), never in the WWW-Authenticate header (header injection; TS requirePCA puts no reason in its challenge).
+func writePCAErrorReason(w http.ResponseWriter, status int, code, reason string, verdict *Verdict) {
+	writePCAErr(w, status, code, "", reason, verdict)
+}
+
+func writePCAErr(w http.ResponseWriter, status int, code, headerDesc, desc string, verdict *Verdict) {
 	challenge := fmt.Sprintf("PCA realm=%q, error=%q", "pca", code)
-	if desc != "" {
-		challenge += fmt.Sprintf(", error_description=%q", desc)
+	if headerDesc != "" {
+		challenge += fmt.Sprintf(", error_description=%q", headerDesc)
 	}
 	w.Header().Set("WWW-Authenticate", challenge)
 	w.Header().Set("Content-Type", "application/json")
@@ -153,8 +171,10 @@ func writePCAError(w http.ResponseWriter, status int, code, desc string, verdict
 // and the next handler runs. On failure it responds with a JSON body and a WWW-Authenticate: PCA
 // challenge, using status:
 //
-//   - 401 when no PCActn is presented, it cannot be decoded, or its grant_ref is unknown;
-//   - 403 when a well-formed PCActn resolves a grant but fails verification.
+//   - 401 when no PCActn is presented, it cannot be decoded, its grant_ref is not a non-empty string, or it is unknown;
+//     (a resolver error is treated as unknown: fail closed);
+//   - 403 when a well-formed PCActn resolves a grant but fails verification (the reason is in the JSON body only,
+//     never in the WWW-Authenticate header).
 func RequirePCA(opts RequirePCAOptions) func(http.Handler) http.Handler {
 	now := opts.Now
 	if now == nil {
@@ -183,13 +203,17 @@ func RequirePCA(opts RequirePCAOptions) func(http.Handler) http.Handler {
 				return
 			}
 
-			verdict, verr := VerifyPCActnCore(pcactn, grant, now(), opts.Audience)
+			vopts := VerifyOptions{Intent: opts.Intent}
+			if opts.IntentV2 != nil {
+				vopts.IntentV2 = opts.IntentV2(r, pcactn)
+			}
+			verdict, verr := VerifyPCActnCoreWith(pcactn, grant, now(), opts.Audience, vopts)
 			if verr != nil {
-				writePCAError(w, http.StatusForbidden, "verification_error", verr.Error(), nil)
+				writePCAErrorReason(w, http.StatusForbidden, "verification_error", verr.Error(), nil)
 				return
 			}
 			if !verdict.Allow {
-				writePCAError(w, http.StatusForbidden, "insufficient_authority", verdict.Reason, &verdict)
+				writePCAErrorReason(w, http.StatusForbidden, "insufficient_authority", verdict.Reason, &verdict)
 				return
 			}
 

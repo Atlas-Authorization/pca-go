@@ -192,6 +192,9 @@ func caveatSatisfied(cv any, ctx map[string]any) (sat bool) {
 	case "budget_alloc":
 		lim, ok := finNum(c["limit"])
 		return ok && lim >= 0
+	case intentSessionCaveat:
+		// Intent Layer v2 session binding (rule 13): no per-action constraint; satisfied iff well-formed.
+		return intentSessionCaveatError(c) == ""
 	}
 	return false
 }

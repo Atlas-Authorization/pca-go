@@ -114,16 +114,16 @@
   "line": "if verr != nil {",
   "reason": "VerifyPCActnCorePolicy never returns a non-nil error (its panic recovery converts to a wire-failure verdict), so the branch is unreachable.",
   "occurrence": 1,
-  "lineno": 176
+  "lineno": 211
  },
  {
   "crate": "go-pca",
   "file": "middleware.go",
   "mutant": "remove call statement",
-  "line": "writePCAError(w, http.StatusForbidden, \"verification_error\", verr.Error(), nil)",
+  "line": "writePCAErrorReason(w, http.StatusForbidden, \"verification_error\", verr.Error(), nil)",
   "reason": "unreachable: VerifyPCActnCorePolicy never returns a non-nil error.",
   "occurrence": 1,
-  "lineno": 177
+  "lineno": 212
  },
  {
   "crate": "go-pca",
@@ -132,7 +132,7 @@
   "line": "v.Checks[\"chain\"] = false",
   "reason": "every branch that follows sets the chain check explicitly.",
   "occurrence": 1,
-  "lineno": 1046
+  "lineno": 1106
  },
  {
   "crate": "go-pca",
@@ -141,7 +141,7 @@
   "line": "v.Checks[\"leaf_signature\"] = false",
   "reason": "every branch that follows sets leaf_signature explicitly.",
   "occurrence": 1,
-  "lineno": 1102
+  "lineno": 1162
  },
  {
   "crate": "go-pca",
@@ -196,7 +196,7 @@
   "line": "if e1 != nil || e2 != nil || a != b {",
   "reason": "A caveat hash error implies the hop signature check (which hashes the body including the caveats) already failed earlier, so || and && agree on every reachable input.",
   "occurrence": 1,
-  "lineno": 663
+  "lineno": 690
  },
  {
   "crate": "go-pca",
@@ -205,7 +205,7 @@
   "line": "if e1 != nil || e2 != nil || rh != gh {",
   "reason": "A hash error on either side implies the hashes differ unless both fail, in which case both forms reject: || and && agree on every reachable input.",
   "occurrence": 1,
-  "lineno": 1057
+  "lineno": 1117
  },
  {
   "crate": "go-pca",
@@ -250,7 +250,7 @@
   "line": "if !ok {",
   "reason": "Five defensive type checks whose fall-through yields the identical verdict: VerifyInclusion step (non-object step becomes a nil map, side \"\" never equals L/R); verifyB64u pub/sig decode (nil bytes fail VerifyStrict's length check); wellTypedCap map assertion (nil map then fails the string-field checks); ValidateWireV2 attestation and risk_claim (nil map then fails the next field check with the same reason string).",
   "occurrence": 10,
-  "lineno": 482
+  "lineno": 485
  },
  {
   "crate": "go-pca",
@@ -259,7 +259,7 @@
   "line": "if !ok {",
   "reason": "Five defensive type checks whose fall-through yields the identical verdict: VerifyInclusion step (non-object step becomes a nil map, side \"\" never equals L/R); verifyB64u pub/sig decode (nil bytes fail VerifyStrict's length check); wellTypedCap map assertion (nil map then fails the string-field checks); ValidateWireV2 attestation and risk_claim (nil map then fails the next field check with the same reason string).",
   "occurrence": 25,
-  "lineno": 858
+  "lineno": 889
  },
  {
   "crate": "go-pca",
@@ -268,7 +268,7 @@
   "line": "if !ok {",
   "reason": "Five defensive type checks whose fall-through yields the identical verdict: VerifyInclusion step (non-object step becomes a nil map, side \"\" never equals L/R); verifyB64u pub/sig decode (nil bytes fail VerifyStrict's length check); wellTypedCap map assertion (nil map then fails the string-field checks); ValidateWireV2 attestation and risk_claim (nil map then fails the next field check with the same reason string).",
   "occurrence": 27,
-  "lineno": 891
+  "lineno": 922
  },
  {
   "crate": "go-pca",
@@ -277,7 +277,7 @@
   "line": "if err != nil {",
   "reason": "capSigMessage decodes a digest that checkSig has just verified equals the freshly computed base64url digest, so the decode cannot fail here (capSigMessage's own error is unit-tested).",
   "occurrence": 7,
-  "lineno": 465
+  "lineno": 468
  },
  {
   "crate": "go-pca",
@@ -295,7 +295,7 @@
   "line": "if r := recover(); r != nil {",
   "reason": "defensive recover: ValidateWireV2/VerifyPCActnCorePolicy cannot panic after their type checks; unreachable.",
   "occurrence": 3,
-  "lineno": 1001
+  "lineno": 1061
  },
  {
   "crate": "go-pca",
@@ -304,7 +304,7 @@
   "line": "if r := recover(); r != nil {",
   "reason": "defensive recover: ValidateWireV2/VerifyPCActnCorePolicy cannot panic after their type checks; unreachable.",
   "occurrence": 2,
-  "lineno": 711
+  "lineno": 742
  },
  {
   "crate": "go-pca",
@@ -313,7 +313,7 @@
   "line": "if r := recover(); r != nil {",
   "reason": "defensive recover: ValidateWireV2/VerifyPCActnCorePolicy cannot panic after their type checks; unreachable.",
   "occurrence": 1,
-  "lineno": 583
+  "lineno": 607
  },
  {
   "crate": "go-pca",
@@ -322,7 +322,7 @@
   "line": "if ok {",
   "reason": "(1) VerifyChainPolicy: when the root PQ authority is missing, resolvePqVerifyKey is still called with the empty authority and refuses identically (same refusal message); (2) ValidateWireV2 threshold: a non-object threshold yields a nil map whose \"shares\" assertion fails, giving the same reason.",
   "occurrence": 1,
-  "lineno": 621
+  "lineno": 645
  },
  {
   "crate": "go-pca",
@@ -331,7 +331,7 @@
   "line": "if ok {",
   "reason": "(1) VerifyChainPolicy: when the root PQ authority is missing, resolvePqVerifyKey is still called with the empty authority and refuses identically (same refusal message); (2) ValidateWireV2 threshold: a non-object threshold yields a nil map whose \"shares\" assertion fails, giving the same reason.",
   "occurrence": 2,
-  "lineno": 928
+  "lineno": 969
  },
  {
   "crate": "go-pca",
@@ -341,15 +341,6 @@
   "reason": "every suite other than ed25519 needs pq_pk, and this block only runs for non-ed25519 suites.",
   "occurrence": 1,
   "lineno": 440
- },
- {
-  "crate": "go-pca",
-  "file": "pca.go",
-  "mutant": "if-cond -> true",
-  "line": "if trustedRoot != nil {",
-  "reason": "with a nil trustedRoot the hash of an empty map never equals the root hash, so the guard is redundant.",
-  "occurrence": 1,
-  "lineno": 547
  },
  {
   "crate": "go-pca",
@@ -394,7 +385,7 @@
   "line": "f, err := strconv.ParseFloat(string(n), 64)",
   "reason": "bitSize other than 32 is treated as 64 by ParseFloat: identical result.",
   "occurrence": 1,
-  "lineno": 688
+  "lineno": 719
  },
  {
   "crate": "go-pca",
@@ -403,7 +394,7 @@
   "line": "f, err := strconv.ParseFloat(string(n), 64)",
   "reason": "bitSize other than 32 is treated as 64 by ParseFloat: identical result.",
   "occurrence": 1,
-  "lineno": 688
+  "lineno": 719
  },
  {
   "crate": "go-pca",
@@ -421,34 +412,7 @@
   "line": "fail(\"leaf_signature\", \"signature does not verify under the leaf holder key\")",
   "reason": "Empty-chain branch: the chain check has already failed (failed=true) and leaf_signature is pre-initialised to false, so the call changes neither the verdict nor the first reason.",
   "occurrence": 2,
-  "lineno": 1118
- },
- {
-  "crate": "go-pca",
-  "file": "pq.go",
-  "mutant": "binary || -> &&",
-  "line": "if len(pk) != mlDsaPublicKeyBytes || len(sig) != mlDsaSignatureBytes {",
-  "reason": "redundant with circl: UnmarshalBinary rejects a wrong-length key and Verify rejects a wrong-length signature.",
-  "occurrence": 1,
-  "lineno": 109
- },
- {
-  "crate": "go-pca",
-  "file": "pq.go",
-  "mutant": "if-cond -> false",
-  "line": "if !ok {",
-  "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier).",
-  "occurrence": 2,
-  "lineno": 121
- },
- {
-  "crate": "go-pca",
-  "file": "pq.go",
-  "mutant": "if-cond -> false",
-  "line": "if !ok {",
-  "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier).",
-  "occurrence": 3,
-  "lineno": 125
+  "lineno": 1178
  },
  {
   "crate": "go-pca",
@@ -457,7 +421,7 @@
   "line": "if !ok {",
   "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier).",
   "occurrence": 4,
-  "lineno": 129
+  "lineno": 282
  },
  {
   "crate": "go-pca",
@@ -466,7 +430,7 @@
   "line": "if !ok {",
   "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier).",
   "occurrence": 5,
-  "lineno": 133
+  "lineno": 286
  },
  {
   "crate": "go-pca",
@@ -474,8 +438,8 @@
   "mutant": "if-cond -> false",
   "line": "if !ok {",
   "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier).",
-  "occurrence": 7,
-  "lineno": 183
+  "occurrence": 6,
+  "lineno": 291
  },
  {
   "crate": "go-pca",
@@ -484,16 +448,16 @@
   "line": "if !ok {",
   "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier).",
   "occurrence": 8,
-  "lineno": 187
+  "lineno": 370
  },
  {
   "crate": "go-pca",
   "file": "pq.go",
   "mutant": "if-cond -> false",
-  "line": "if len(pk) != mlDsaPublicKeyBytes || len(sig) != mlDsaSignatureBytes {",
-  "reason": "redundant with circl: UnmarshalBinary rejects a wrong-length key and Verify rejects a wrong-length signature.",
-  "occurrence": 1,
-  "lineno": 109
+  "line": "if !ok {",
+  "reason": "Six defensive type checks redundant with the next step: mlDsa65VerifyB64u (non-string key/sig becomes \"\" and fails the exact-length strict decode; failed decodes give nil slices that fail the length guard) and verifyLeafSuite (unknown suite has an empty alg and falls to the final false; a non-string sig becomes \"\" and fails every verifier).",
+  "occurrence": 9,
+  "lineno": 374
  },
  {
   "crate": "go-pca",
@@ -501,17 +465,8 @@
   "mutant": "return false -> true",
   "line": "return false",
   "reason": "Two unreachable returns: UnmarshalBinary of an exactly-1952-byte key cannot fail (circl only errors on length), and the switch in verifyLeafSuite is exhaustive over the closed suite registry.",
-  "occurrence": 2,
-  "lineno": 114
- },
- {
-  "crate": "go-pca",
-  "file": "pq.go",
-  "mutant": "return false -> true",
-  "line": "return false",
-  "reason": "Two unreachable returns: UnmarshalBinary of an exactly-1952-byte key cannot fail (circl only errors on length), and the switch in verifyLeafSuite is exhaustive over the closed suite registry.",
-  "occurrence": 10,
-  "lineno": 202
+  "occurrence": 5,
+  "lineno": 253
  },
  {
   "crate": "go-pca",
@@ -576,5 +531,2906 @@
   "reason": "bitSize 63 vs 64 only matters above 2^62; the lexeme is at most 16 digits.",
   "occurrence": 1,
   "lineno": 276
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "int 64 -> +1",
+  "line": "x, err := strconv.ParseFloat(string(n), 64)",
+  "reason": "bitSize other than 32 is treated as 64 by ParseFloat.",
+  "occurrence": 1,
+  "lineno": 95
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "int 64 -> -1",
+  "line": "x, err := strconv.ParseFloat(string(n), 64)",
+  "reason": "bitSize other than 32 is treated as 64 by ParseFloat.",
+  "occurrence": 1,
+  "lineno": 95
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, false",
+  "reason": "every finNum caller discards the value when ok is false (all uses are `ok && ...` or an early return on !ok), so the returned value is unobservable.",
+  "occurrence": 1,
+  "lineno": 97
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, false",
+  "reason": "every finNum caller discards the value when ok is false (all uses are `ok && ...` or an early return on !ok), so the returned value is unobservable.",
+  "occurrence": 2,
+  "lineno": 125
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, false",
+  "reason": "every finNum caller discards the value when ok is false (all uses are `ok && ...` or an early return on !ok), so the returned value is unobservable.",
+  "occurrence": 3,
+  "lineno": 128
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "int 2 -> +1",
+  "line": "var reversibilityOrder = map[string]int{\"reversible\": 0, \"rate_limited\": 1, \"irreversible\": 2}",
+  "reason": "irreversible 2 -> 3 keeps the strict order 0 < 1 < 3; reversibilityOrder is only compared with <=, never by value.",
+  "occurrence": 1,
+  "lineno": 133
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "if-cond -> false",
+  "line": "if recover() != nil {",
+  "reason": "caveatSatisfied has no reachable panic (only comma-ok type assertions, nil-safe map reads and total helpers), so the recover branch never runs. (with the branch off the named result also stays false).",
+  "occurrence": 1,
+  "lineno": 137
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "assign false -> true",
+  "line": "sat = false",
+  "reason": "caveatSatisfied has no reachable panic (only comma-ok type assertions, nil-safe map reads and total helpers), so the recover branch never runs.",
+  "occurrence": 1,
+  "lineno": 138
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-object caveat leaves c a nil map: typ is \"\", which matches no case, so the result is false either way.",
+  "occurrence": 1,
+  "lineno": 142
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok1 || !ok2 || per <= 0 || !ok3 {",
+  "reason": "(!ok1 && !ok2) vs (!ok1 || !ok2): a missing max reads 0 (n < 0 is false) and a missing per_secs reads 0 (per <= 0 refuses), so every input still yields false.",
+  "occurrence": 1,
+  "lineno": 164
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok1 || !ok2 {",
+  "reason": "a non-string class/current reads \"\", which is not in reversibilityOrder, so the ok1/ok2 lookups on the next lines refuse it anyway.",
+  "occurrence": 1,
+  "lineno": 182
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok1 || !ok2 {",
+  "reason": "a non-string class/current reads \"\", which is not in reversibilityOrder, so the ok1/ok2 lookups on the next lines refuse it anyway.",
+  "occurrence": 1,
+  "lineno": 182
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "binary > -> >=",
+  "line": "if lc, ok := leaf[\"caveats\"].([]any); ok && len(lc) > len(cs) {",
+  "reason": "len(lc) == len(cs) appends lc[len(cs):], the empty slice: output unchanged.",
+  "occurrence": 1,
+  "lineno": 47
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-object action leaves it a nil map; params then fails its own map assertion and the caveat is refused anyway.",
+  "occurrence": 3,
+  "lineno": 210
+ },
+ {
+  "crate": "go-pca",
+  "file": "caveats.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-object params leaves it a nil map; params[\"amount\"] is absent, finNum fails and the caveat is refused anyway.",
+  "occurrence": 4,
+  "lineno": 214
+ },
+ {
+  "crate": "go-pca",
+  "file": "middleware.go",
+  "mutant": "int 1 -> 2",
+  "line": "b, ok := DecodeB64uStrict(value, -1)",
+  "reason": "DecodeB64uStrict only length-checks when wantLen >= 0; -1 and -2 both mean any length.",
+  "occurrence": 1,
+  "lineno": 78
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "int 1 -> 2",
+  "line": "if rp, has := h[\"root_pq_pk\"]; has && !b64uOK(rp, -1) {",
+  "occurrence": 1,
+  "lineno": 174,
+  "reason": "b64uOK(x, -2) behaves exactly like b64uOK(x, -1): DecodeB64uStrict only checks the length when wantLen >= 0, so any negative means any length."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "int 1 -> 2",
+  "line": "if q, has := e[\"pq_pk\"]; has && !b64uOK(q, -1) {",
+  "occurrence": 1,
+  "lineno": 536,
+  "reason": "b64uOK(x, -2) behaves exactly like b64uOK(x, -1): DecodeB64uStrict only checks the length when wantLen >= 0, so any negative means any length."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "if-cond -> false",
+  "line": "if !accReceiptShapeOK(r) {",
+  "occurrence": 1,
+  "lineno": 625,
+  "reason": "a malformed receipt can never return true: the only true path is verifyAccReceiptSignature, which re-runs accReceiptShapeOK first; the loop body cannot panic."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "if-cond -> false",
+  "line": "if rname == \"\" {",
+  "occurrence": 1,
+  "lineno": 635,
+  "reason": "rname is only compared with ename, which is never \"\" (absent alg defaults to ed25519, unknown entry algs are refused by the key-set shape), so \"\" and \"x\" both mismatch."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "if-cond -> true",
+  "line": "if f.tracked != nil {",
+  "occurrence": 1,
+  "lineno": 643,
+  "reason": "with tracked nil, jsF(nil) is NaN: version < NaN and version == NaN are both false, so no key set is skipped, same as not entering the block."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "binary || -> &&",
+  "line": "if e == nil || e[\"pk\"] != r[\"signer\"] || issued < jsF(e[\"not_before\"]) {",
+  "occurrence": 1,
+  "lineno": 665,
+  "reason": "first || only: a non-nil entry whose pk differs from receipt.signer then reaches verifyAccReceiptSignature(r, pk), which refuses since r.signer != pk; a nil entry still continues."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "if-cond -> false",
+  "line": "if ename == \"\" {",
+  "occurrence": 1,
+  "lineno": 673,
+  "reason": "dead branch: absent entry alg resolves to ed25519 and unknown entry algs are refused by sequencerKeySetShapeOK, so ename is never \"\"."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent.go",
+  "mutant": "int 64 -> +1",
+  "line": "if g, err := strconv.ParseFloat(string(t), 64); err == nil {",
+  "occurrence": 1,
+  "lineno": 174,
+  "reason": "strconv.ParseFloat treats every bitSize other than 32 as 64: 65 parses identically."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent.go",
+  "mutant": "int 64 -> -1",
+  "line": "if g, err := strconv.ParseFloat(string(t), 64); err == nil {",
+  "occurrence": 1,
+  "lineno": 174,
+  "reason": "strconv.ParseFloat treats every bitSize other than 32 as 64: 63 parses identically."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_revocation.go",
+  "mutant": "int 0x01 -> +1",
+  "line": "b := append([]byte{0x01}, l...)",
+  "occurrence": 1,
+  "lineno": 32,
+  "reason": "revNodeHash is dead code (never called; revsetRoot builds its tree through MerkleRoot), so its node prefix is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_revocation.go",
+  "mutant": "binary && -> ||",
+  "line": "if !(size == math.Trunc(size) && math.Abs(size) <= maxSafeInt) {",
+  "occurrence": 1,
+  "lineno": 38,
+  "reason": "bindRevRoot is only called with float64(len(list)), always an integer far below 2^53: the guard never fires either way."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_revocation.go",
+  "mutant": "binary <= -> <",
+  "line": "if !(size == math.Trunc(size) && math.Abs(size) <= maxSafeInt) {",
+  "occurrence": 1,
+  "lineno": 38,
+  "reason": "bindRevRoot is only called with float64(len(list)), never near maxSafeInt: < and <= agree on every reachable size."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_revocation.go",
+  "mutant": "return false -> true",
+  "line": "return \"\", false",
+  "occurrence": 1,
+  "lineno": 39,
+  "reason": "unreachable: bindRevRoot's size is always float64(len(list)), an integral safe integer."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_revocation.go",
+  "mutant": "return false -> true",
+  "line": "return \"\", false",
+  "occurrence": 2,
+  "lineno": 43,
+  "reason": "unreachable: {size: safe integer, tree: base64url string} always serialises strictly."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_revocation.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 3,
+  "lineno": 101,
+  "reason": "bindSuiteFields fails only for a PQ suite without pq_pk; verifyPinnedSuite then refuses (no PQ key) with the same reason."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_revocation.go",
+  "mutant": "if-cond -> false",
+  "line": "if jsF(ep[\"epoch\"]) == jsF(le[\"epoch\"]) && ep[\"root\"] != le[\"root\"] {",
+  "occurrence": 1,
+  "lineno": 231,
+  "reason": "unreachable after the drop check: equal epoch numbers mean equal set sizes, and an append-only superset of equal size is the same set, so the roots agree."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_session.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 3,
+  "lineno": 171,
+  "reason": "a non-object grant reads as a nil map whose caveats is not an array: the next guard returns the same (nil, false)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_session.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 4,
+  "lineno": 175,
+  "reason": "a nil caveats slice ranges zero times and falls through to the same (nil, false)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_session.go",
+  "mutant": "int 1 -> 2",
+  "line": "if q, has := p[\"pq_pk\"]; has && !b64uOK(q, -1) {",
+  "occurrence": 1,
+  "lineno": 242,
+  "reason": "DecodeB64uStrict ignores every negative wantLen: -2 and -1 both mean any length."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_session.go",
+  "mutant": "int 1 -> 2",
+  "line": "if q, has := r[\"pq_pk\"]; has && !b64uOK(q, -1) {",
+  "occurrence": 1,
+  "lineno": 332,
+  "reason": "DecodeB64uStrict ignores every negative wantLen: -2 and -1 both mean any length."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> false",
+  "line": "if cur == nil {",
+  "occurrence": 1,
+  "lineno": 66,
+  "reason": "member(nil, k) already returns (nil, false): skipping the explicit nil check changes nothing."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 3,
+  "lineno": 70,
+  "reason": "a missing member leaves cur nil and ok false: the next iteration (or the final return) yields the same (nil, false)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> true",
+  "line": "if gc != nil {",
+  "occurrence": 1,
+  "lineno": 476,
+  "reason": "a typed-nil caveat map fails intentSessionCaveatError with the same 'not an intent_session caveat' as an untyped nil."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> true",
+  "line": "if c != nil {",
+  "occurrence": 1,
+  "lineno": 519,
+  "reason": "a typed-nil caveat map fails intentSessionCaveatError exactly like an untyped nil: same reason."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "int 1 -> 0",
+  "line": "m := math.Inf(1)",
+  "occurrence": 1,
+  "lineno": 538,
+  "reason": "math.Inf(sign) is +Inf for every sign >= 0: Inf(0) == Inf(1)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "int 1 -> 2",
+  "line": "m := math.Inf(1)",
+  "occurrence": 1,
+  "lineno": 538,
+  "reason": "math.Inf(sign) is +Inf for every sign >= 0: Inf(2) == Inf(1)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> true",
+  "line": "if hasRev {",
+  "occurrence": 1,
+  "lineno": 539,
+  "reason": "without S.revocation the step returns the 'no revocation authority' reason before m is read; the NaN it would fold in is never used."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> false",
+  "line": "if hk == \"wallet\" {",
+  "occurrence": 1,
+  "lineno": 636,
+  "reason": "a wallet accumulator selects only by event (accumulatorDeclError), so accSelects is false, a wallet claim was already refused, and the non-site-local branch continues: same result."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> true",
+  "line": "if haveSchema {",
+  "occurrence": 1,
+  "lineno": 674,
+  "reason": "without a schema schemaVerbOf(nil) returns (nil, false), so kd stays nil and the same free-text reason is returned."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "binary || -> &&",
+  "line": "if !has || !isS || !contains(monitorStates(m), s) {",
+  "occurrence": 1,
+  "lineno": 804,
+  "reason": "monitorStates never contains the empty string, so under (!has && !isS) || !contains a missing or non-string state is still refused (the other grouping of this line is killed)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "binary == -> !=",
+  "line": "return why == \"\"",
+  "occurrence": 1,
+  "lineno": 872,
+  "reason": "run's boolean result is never read by any caller (each check is recorded in out.checks)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "remove call statement",
+  "line": "panic(v2Fail(\"canonical projection\"))",
+  "occurrence": 1,
+  "lineno": 887,
+  "reason": "unreachable: schemaStep already hashed the params strictly, so canonicalising their set / array members cannot fail."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> true",
+  "line": "if !wb.skip {",
+  "occurrence": 1,
+  "lineno": 943,
+  "reason": "after a W-B panic wb.checks is nil: ranging its names adds nothing, same as skipping."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> true",
+  "line": "if !d.ok {",
+  "occurrence": 1,
+  "lineno": 983,
+  "reason": "a passing map decision carries an empty reason, so returning d.reason equals returning \"\"."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pca.go",
+  "mutant": "if-cond -> false",
+  "line": "if trustedRoot == nil {",
+  "occurrence": 1,
+  "lineno": 545,
+  "reason": "CapHash(nil) never equals the hash of a real root capability, so rootIsTrusted is false either way."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_artifacts.go",
+  "mutant": "binary + -> -",
+  "line": "out := make(map[string]any, len(base)+2)",
+  "occurrence": 1,
+  "lineno": 30,
+  "reason": "map capacity hint only: a negative runtime hint is treated as 0 by makemap; the bound body is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_artifacts.go",
+  "mutant": "int 2 -> +1",
+  "line": "out := make(map[string]any, len(base)+2)",
+  "occurrence": 1,
+  "lineno": 30,
+  "reason": "map capacity hint only (len(base)+3); the bound body is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_artifacts.go",
+  "mutant": "int 2 -> -1",
+  "line": "out := make(map[string]any, len(base)+2)",
+  "occurrence": 1,
+  "lineno": 30,
+  "reason": "map capacity hint only (len(base)+1); the bound body is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_artifacts.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok || pk == \"\" {",
+  "occurrence": 1,
+  "lineno": 56,
+  "reason": "&& variant still refuses: a non-string pq_pk yields pk == \"\" (refused), an empty string pq_pk can only match an empty pin and then fails the strict pk decode in verifyLeafSuite."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_artifacts.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok || !ok2 {",
+  "occurrence": 1,
+  "lineno": 137,
+  "reason": "&& variant: a missing sig becomes \"\" and a non-string signer \"\", both of which fail the strict base64url decode in verifyLeafSuite; verdict unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_artifacts.go",
+  "mutant": "int 1 -> 0",
+  "line": "if len(segs) < 1 || len(segs) > 8 {",
+  "occurrence": 1,
+  "lineno": 224,
+  "reason": "strings.Split always returns at least one element, so len(segs) < 0 and len(segs) < 1 are both never true."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "int 1153 -> -1",
+  "line": "lessSignatureMinBytes = 1153",
+  "occurrence": 1,
+  "lineno": 46,
+  "reason": "min 1152: (1329-1152) % 16 != 0, so 1152 is still refused by the step rule; the accepted length set is unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "int 1 -> 2",
+  "line": "b, ok := DecodeB64uStrict(s, -1)",
+  "occurrence": 1,
+  "lineno": 140,
+  "reason": "any negative wantLen means no length check in DecodeB64uStrict (-1 and -2 behave identically)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "binary || -> &&",
+  "line": "if pkLen == 0 || len(pk) != pkLen || !p.sigLenOK(len(sig)) {",
+  "occurrence": 1,
+  "lineno": 246,
+  "multiplicity": 2,
+  "reason": "redundant guards (both ||): circl UnmarshalBinary/Verify and cgoLessCat1Verify refuse a wrong-length key or signature, pqNone hits the switch default, and pqVerifyB64u decodes pk at its exact length and checks sigLenOK first."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "int 0 -> 1",
+  "line": "if pkLen == 0 || len(pk) != pkLen || !p.sigLenOK(len(sig)) {",
+  "occurrence": 1,
+  "lineno": 246,
+  "reason": "pqNone (the only pkLen==0 primitive) falls through to the switch default (false); every other primitive has pkLen != 0 and != 1."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "int 1 -> 2",
+  "line": "sg, ok := DecodeB64uStrict(sgs, -1)",
+  "occurrence": 1,
+  "lineno": 294,
+  "reason": "any negative wantLen means no length check in DecodeB64uStrict (-1 and -2 behave identically)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok || !p.sigLenOK(len(sg)) {",
+  "occurrence": 1,
+  "lineno": 295,
+  "reason": "redundant: pqVerifyRaw re-checks sigLenOK (a failed decode is nil, length 0, refused there)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok || !p.sigLenOK(len(sg)) {",
+  "occurrence": 1,
+  "lineno": 295,
+  "reason": "redundant: pqVerifyRaw re-checks sigLenOK (a failed decode is nil, length 0, refused there)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "less_cgo.go",
+  "mutant": "if-cond -> false",
+  "line": "if len(pk) != lessPublicKeyBytes || !pqLessCat1.sigLenOK(len(sig)) {",
+  "occurrence": 1,
+  "lineno": 29,
+  "reason": "redundant pre-check: atlas_less_cat1_verify (lessc/atlas_less.c) itself returns 0 unless pk_len == 97484 and sig_len is in 1153..1329 step 16; verdict unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "less_cgo.go",
+  "mutant": "binary || -> &&",
+  "line": "if len(pk) != lessPublicKeyBytes || !pqLessCat1.sigLenOK(len(sig)) {",
+  "occurrence": 1,
+  "lineno": 29,
+  "reason": "redundant pre-check: atlas_less_cat1_verify (lessc/atlas_less.c) itself returns 0 unless pk_len == 97484 and sig_len is in 1153..1329 step 16; verdict unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "if-cond -> true",
+  "line": "if fn%2 == 0 {",
+  "occurrence": 1,
+  "lineno": 92,
+  "reason": "the guarded loop re-tests fn%2 == 0 itself, so entering the block for odd fn runs zero iterations: same root."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 2 -> -1",
+  "line": "if fn%2 == 0 {",
+  "occurrence": 1,
+  "lineno": 92,
+  "reason": "fn % -1 is 0, so the guard is always true; the loop re-tests fn%2 == 0 itself: same root."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 0 -> 1",
+  "line": "for fn%2 == 0 && fn != 0 {",
+  "occurrence": 1,
+  "lineno": 93,
+  "reason": "fn != 1 vs fn != 0: the block is entered with fn >= 1 (sn == 0 returned earlier) and an even positive fn halves to an odd value before 0, so fn is never 0 or 1 at the test."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "if-cond -> false",
+  "line": "if !jsIsInt(h[\"cells\"]) || jsF(h[\"cells\"]) < 1 || jsF(h[\"cells\"]) > maxVerbCells {",
+  "occurrence": 1,
+  "lineno": 221,
+  "reason": "redundant with the per-dimension bound (n > maxVerbCells) and the final float64(n) == cells: only an integer in [1, 2^20] can equal the product."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "binary || -> &&",
+  "line": "if !jsIsInt(h[\"cells\"]) || jsF(h[\"cells\"]) < 1 || jsF(h[\"cells\"]) > maxVerbCells {",
+  "occurrence": 1,
+  "lineno": 221,
+  "multiplicity": 2,
+  "reason": "redundant with the per-dimension bound (n > maxVerbCells) and the final float64(n) == cells: only an integer in [1, 2^20] can equal the product."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 1 -> 0",
+  "line": "if !jsIsInt(h[\"cells\"]) || jsF(h[\"cells\"]) < 1 || jsF(h[\"cells\"]) > maxVerbCells {",
+  "occurrence": 1,
+  "lineno": 221,
+  "reason": "cells == 0 can never equal the product of the dimension cell counts (each >= 1): refused by the final equality."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 1 -> 2",
+  "line": "i := -1",
+  "occurrence": 1,
+  "lineno": 305,
+  "reason": "-2 and -1 are both < 0: every use is the i < 0 test or an overwrite."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "assign false -> true",
+  "line": "best, bestLen, exact := -1, -1, false",
+  "occurrence": 1,
+  "lineno": 318,
+  "reason": "exact is never read (_ = exact)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 1 -> 2",
+  "line": "best, bestLen, exact := -1, -1, false",
+  "occurrence": 1,
+  "lineno": 318,
+  "multiplicity": 2,
+  "reason": "best = -2 behaves as -1 (only best >= 0 is tested); bestLen = -2 behaves as -1 (a valid prefix is non-empty, jsLen >= 1)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 1 -> 0",
+  "line": "best, bestLen, exact := -1, -1, false",
+  "occurrence": 1,
+  "lineno": 318,
+  "reason": "bestLen = 0: a validated prefix value is non-empty (jsLen >= 1 > 0), so the first matching prefix is still taken."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "binary > -> >=",
+  "line": "if v[\"kind\"] == \"prefix\" && jsStartsWith(s, val) && jsLen(val) > bestLen {",
+  "occurrence": 1,
+  "lineno": 326,
+  "reason": "two matching prefixes of equal length are the same string, a duplicate mapDimOK refuses: > and >= pick the same value."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "if-cond -> false",
+  "line": "if recover() != nil {",
+  "occurrence": 1,
+  "lineno": 410,
+  "reason": "defensive: every type assertion after mapDisclosureOK is on a validated shape, so no input reaches a panic to recover."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 7,
+  "lineno": 483,
+  "reason": "a non-object leaf reads as a nil map: its absent salt then fails DecodeB64uStrict and returns the same empty result."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok || p == \"\" {",
+  "occurrence": 1,
+  "lineno": 31,
+  "reason": "a non-string path leaves p == \"\"; strings.Split gives [\"\"], which fails the root check on the next line: same (nil, false)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok || p == \"\" {",
+  "occurrence": 1,
+  "lineno": 31,
+  "reason": "!ok implies p == \"\" (zero value), so `!ok && p == \"\"` equals `!ok || p == \"\"`; any remaining empty path fails the root check anyway."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 1 -> 2",
+  "line": "if !ok || (len(s) > 1 && s[0] == '0') || i >= len(t) {",
+  "occurrence": 1,
+  "lineno": 49,
+  "reason": "a leading-zero index of length 2 is already refused by arrayIndex (\"0x\" with len > 1), so the redundant clause's threshold is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 1 -> 2",
+  "line": "return -1, true",
+  "occurrence": 1,
+  "lineno": 80,
+  "reason": "ordered's result is only tested by sign (< 0, <= 0, > 0, >= 0); -2 has the sign of -1."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 1 -> 2",
+  "line": "return 1, true",
+  "occurrence": 1,
+  "lineno": 82,
+  "reason": "ordered's result is only tested by sign; 2 has the sign of 1."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, false",
+  "occurrence": 1,
+  "lineno": 86,
+  "reason": "the value is ignored when ok is false (the leaf returns unknown)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, false",
+  "occurrence": 2,
+  "lineno": 92,
+  "reason": "the value is ignored when ok is false (the leaf returns unknown)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 1 -> 2",
+  "line": "return -1, true",
+  "occurrence": 2,
+  "lineno": 97,
+  "reason": "ordered's result is only tested by sign; -2 has the sign of -1."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 1 -> 2",
+  "line": "return 1, true",
+  "occurrence": 2,
+  "lineno": 99,
+  "reason": "ordered's result is only tested by sign; 2 has the sign of 1."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, false",
+  "occurrence": 3,
+  "lineno": 103,
+  "reason": "the value is ignored when ok is false (the leaf returns unknown)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "if-cond -> true",
+  "line": "if len(out) == 0 || out[len(out)-1].kind != 2 {",
+  "occurrence": 1,
+  "lineno": 139,
+  "reason": "not collapsing consecutive '*' tokens is semantically identical: a star followed by a star re-anchors starTi past both, and trailing stars are skipped."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 2 -> +1",
+  "line": "if len(out) == 0 || out[len(out)-1].kind != 2 {",
+  "occurrence": 1,
+  "lineno": 139,
+  "reason": "`kind != 3` is always true, i.e. consecutive stars are not collapsed, which matches identically (see the if-cond -> true entry)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "return false -> true",
+  "line": "return false, false",
+  "occurrence": 1,
+  "lineno": 154,
+  "reason": "ok is false, so triLeaf returns unknown whatever the match bit is."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 1 -> 2",
+  "line": "ti, si, starTi, starSi := 0, 0, -1, 0",
+  "occurrence": 1,
+  "lineno": 156,
+  "reason": "starTi is only tested with `>= 0`; -2 and -1 are both 'no star seen'."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 0 -> 1",
+  "line": "ti, si, starTi, starSi := 0, 0, -1, 0",
+  "occurrence": 1,
+  "lineno": 156,
+  "reason": "starSi is always assigned when a star is consumed (which also sets starTi >= 0) before it is ever read."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "binary >= -> >",
+  "line": "} else if starTi >= 0 {",
+  "occurrence": 1,
+  "lineno": 165,
+  "reason": "starTi is only ever -1 or ti after an increment (>= 1), so `> 0` and `>= 0` agree."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "int 0 -> 1",
+  "line": "} else if starTi >= 0 {",
+  "occurrence": 1,
+  "lineno": 165,
+  "reason": "starTi is only ever -1 or >= 1, so `>= 1` and `>= 0` agree."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "return false -> true",
+  "line": "return false, false",
+  "occurrence": 2,
+  "lineno": 186,
+  "reason": "decidable is false, so triLeaf returns unknown whatever the match bit is."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 6,
+  "lineno": 270,
+  "reason": "a non-string op becomes \"\", which is not exists/member_of and falls to the switch default: unknown either way (every earlier exit is also unknown or op-independent)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok || coll == \"\" {",
+  "occurrence": 1,
+  "lineno": 300,
+  "reason": "a non-string collection leaves coll == \"\", and resolvePath(\"\") is not found: unknown either way."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok || coll == \"\" {",
+  "occurrence": 1,
+  "lineno": 300,
+  "reason": "!ok implies coll == \"\" (zero value), so `!ok && coll == \"\"` equals `!ok || coll == \"\"`; an empty collection path is not found anyway."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "if-cond -> false",
+  "line": "if p == \"*\" {",
+  "occurrence": 1,
+  "lineno": 527,
+  "reason": "without the shortcut \"*\" takes the trailing-star branch: jsStartsWith(resource, \"\") is always true."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "if-cond -> false",
+  "line": "if recover() != nil {",
+  "occurrence": 1,
+  "lineno": 550,
+  "reason": "defensive recover: every type assertion in the evaluator is checked and no index is unguarded, so no recoverable panic can occur."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "assign false -> true",
+  "line": "ok = false",
+  "occurrence": 1,
+  "lineno": 551,
+  "reason": "defensive recover: no recoverable panic can occur in the evaluator (see the if-cond entry on the line above)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "predicates.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok || len(arr) == 0 {",
+  "occurrence": 3,
+  "lineno": 588,
+  "reason": "a non-array leaves arr nil with len 0, so `!ok && len(arr) == 0` still refuses it; an empty array runs a zero-iteration loop and returns false."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 2,
+  "lineno": 192,
+  "reason": "A non-string param yields ps \"\" and params never owns \"\" (paramDeclOK requires action.params.<name>), so the own check refuses it."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "int 1 -> 2",
+  "line": "if pv, has := s[\"pq_value\"]; has && !b64uOK(pv, -1) {",
+  "occurrence": 1,
+  "lineno": 302,
+  "reason": "b64uOK with any negative wantLen accepts any length: -1 and -2 behave identically."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 4,
+  "lineno": 320,
+  "reason": "A non-array keys value leaves keys nil; the lookup finds no key and key == nil refuses."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if key == nil {",
+  "occurrence": 1,
+  "lineno": 330,
+  "reason": "With key nil the next line reads pk from a nil map (ok false) and refuses."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok || !b64uOK(pk, b32) {",
+  "occurrence": 1,
+  "lineno": 334,
+  "reason": "A missing or wrong-length pk cannot verify an ed25519 signature, so verifyPinnedSuite refuses anyway."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "binary || -> &&",
+  "line": "if !ok || !b64uOK(pk, b32) {",
+  "occurrence": 1,
+  "lineno": 334,
+  "reason": "A missing or wrong-length pk cannot verify an ed25519 signature, so verifyPinnedSuite refuses anyway."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "occurrence": 7,
+  "lineno": 369,
+  "reason": "A non-array verbs leaves a nil slice; the loop is empty and the function returns (nil,false)."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "int 1 -> 0",
+  "line": "return -1",
+  "occurrence": 1,
+  "lineno": 398,
+  "reason": "num returns any negative or zero sentinel; both are refused by the y/mo/d < 1 range check on line 408."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "int 1 -> 2",
+  "line": "return -1",
+  "occurrence": 1,
+  "lineno": 398,
+  "reason": "num returns any negative or zero sentinel; both are refused by the y/mo/d < 1 range check on line 408."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if y < 0 || mo < 0 || d < 0 {",
+  "occurrence": 1,
+  "lineno": 405,
+  "reason": "Redundant guard: the y < 1 || mo < 1 || d < 1 check on line 408 refuses every value this one refuses."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "binary || -> &&",
+  "line": "if y < 0 || mo < 0 || d < 0 {",
+  "occurrence": 1,
+  "lineno": 405,
+  "multiplicity": 2,
+  "reason": "Redundant guard: the y < 1 || mo < 1 || d < 1 check on line 408 refuses every value this one refuses."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "binary < -> <=",
+  "line": "if y < 0 || mo < 0 || d < 0 {",
+  "occurrence": 1,
+  "lineno": 405,
+  "multiplicity": 3,
+  "reason": "Redundant guard: the y < 1 || mo < 1 || d < 1 check on line 408 refuses every value this one refuses."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "int 0 -> 1",
+  "line": "if y < 0 || mo < 0 || d < 0 {",
+  "occurrence": 1,
+  "lineno": 405,
+  "multiplicity": 3,
+  "reason": "Redundant guard: the y < 1 || mo < 1 || d < 1 check on line 408 refuses every value this one refuses."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if v == nil {",
+  "occurrence": 2,
+  "lineno": 574,
+  "reason": "With v nil, v[\"params\"] yields a nil map; the loop is empty and the same empty projection is returned."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 4 -> +1",
+  "line": "return 4",
+  "occurrence": 1,
+  "lineno": 53,
+  "reason": "rankOf's fallback is unreachable: it is only called with labels from taintRank and with a validated critical_max level."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 4 -> +1",
+  "line": "var taintRank = map[string]int{\"trusted\": 0, \"first_party\": 1, \"tool\": 2, \"web\": 3, \"agent\": 4}",
+  "occurrence": 1,
+  "lineno": 41,
+  "reason": "agent's rank is only compared with other ranks (all order-preserving) and mapped back by equality: 5 for agent changes no verdict."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 4 -> -1",
+  "line": "return 4",
+  "occurrence": 1,
+  "lineno": 53,
+  "reason": "rankOf's fallback is unreachable: it is only called with labels from taintRank and with a validated critical_max level."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "binary && -> ||",
+  "line": "return s, found && ok",
+  "occurrence": 1,
+  "lineno": 269,
+  "reason": "found && !string yields subject \"\" which no wire-valid fact (non-empty subject) can equal: same 'another subject' refusal."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> false",
+  "line": "if len(nums) == 0 {",
+  "occurrence": 1,
+  "lineno": 429,
+  "reason": "unreachable: validateWorldPolicy forces min_oracles >= 1, so fresh (and nums) is never empty at the median."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> false",
+  "line": "if recover() != nil {",
+  "occurrence": 1,
+  "lineno": 307,
+  "reason": "no panic is reachable in decideIntentWorld (min_oracles >= 2*max_faulty+1 >= 1 keeps lowerMedian non-empty); the recover never fires."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "remove call statement",
+  "line": "panic(\"lowerMedian: empty\")",
+  "occurrence": 1,
+  "lineno": 430,
+  "reason": "unreachable: validateWorldPolicy forces min_oracles >= 1, so fresh (and nums) is never empty at the median."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the committed offer set was not supplied\"",
+  "occurrence": 1,
+  "lineno": 562,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the PCActn commits no offer set but the policy requires one\"",
+  "occurrence": 1,
+  "lineno": 559,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the offer set is not strictly canonical\"",
+  "occurrence": 1,
+  "lineno": 570,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: signature suite: \" + se",
+  "occurrence": 1,
+  "lineno": 576,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the supplied offer set does not match the committed reference\"",
+  "occurrence": 1,
+  "lineno": 573,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: bad site signature\"",
+  "occurrence": 1,
+  "lineno": 589,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the offer set was issued for another audience\"",
+  "occurrence": 1,
+  "lineno": 592,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the offer set is bound to another session\"",
+  "occurrence": 1,
+  "lineno": 595,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: no usable clock (now must be a safe integer): the offer set counts as stale\"",
+  "occurrence": 1,
+  "lineno": 598,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the offer set is issued in the future\"",
+  "occurrence": 1,
+  "lineno": 602,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the offer set is stale\"",
+  "occurrence": 1,
+  "lineno": 605,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the offer set is not declared complete\"",
+  "occurrence": 1,
+  "lineno": 608,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the search was narrowed beyond the intent filter (coverage)\"",
+  "occurrence": 1,
+  "lineno": 615,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the action names no offer id at the declared parameter\"",
+  "occurrence": 1,
+  "lineno": 621,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the chosen offer is not in the signed offer set\"",
+  "occurrence": 1,
+  "lineno": 632,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: the chosen offer does not satisfy the intent filter\"",
+  "occurrence": 1,
+  "lineno": 636,
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "binary < -> <=",
+  "line": "if offerMatches(m, fo) && jsF(m[\"price\"]) < min {",
+  "occurrence": 1,
+  "lineno": 641,
+  "reason": "< vs <= on the running minimum: an equal price leaves the minimum unchanged."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "binary > -> >=",
+  "line": "if jsStartsWith(cls, p[:len(p)-1]) && (!found || jsLen(p) > jsLen(best)) {",
+  "occurrence": 1,
+  "lineno": 719,
+  "reason": "two distinct prefix.* patterns of equal length cannot both prefix the same class, so a tie never occurs."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> false",
+  "line": "if recover() != nil {",
+  "occurrence": 2,
+  "lineno": 837,
+  "reason": "no panic is reachable in decideParamProvenance (every type assertion follows a validation); the recover never fires."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "binary != -> ==",
+  "line": "if a != b && strings.HasPrefix(b, a+\".\") {",
+  "occurrence": 1,
+  "lineno": 879,
+  "reason": "prov keys are single-segment action.params.<ident> (validateProvWire), so no prov path is a dotted prefix of another: the overlap test never fires either way."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 1 -> 0",
+  "line": "worst := -1",
+  "occurrence": 1,
+  "lineno": 902,
+  "reason": "refs are 1..8 (validateProvWire) with ranks >= 0, so worst starts below or at the first rank: the join is unchanged for init 0."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 1 -> 2",
+  "line": "worst := -1",
+  "occurrence": 1,
+  "lineno": 902,
+  "reason": "refs are 1..8 (validateProvWire) with ranks >= 0, so any init below 0 gives the same join."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "binary && -> ||",
+  "line": "if l, has := reg[ref]; has && isTaintLevel(l) {",
+  "occurrence": 1,
+  "lineno": 907,
+  "reason": "registry entries are validated taint levels, so has implies isTaintLevel and !has implies !isTaintLevel(nil): && == ||."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "binary < -> <=",
+  "line": "if i < 0 || !isDigestV(rest[:i]) || len(rest[i+1:]) == 0 {",
+  "occurrence": 1,
+  "lineno": 913,
+  "reason": "i == 0 means an empty receipt digest, which isDigestV rejects in the same branch: same refusal."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "if i < 0 || !isDigestV(rest[:i]) || len(rest[i+1:]) == 0 {",
+  "occurrence": 1,
+  "lineno": 913,
+  "reason": "i == 0 means an empty receipt digest, which isDigestV rejects in the same branch: same refusal."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "binary > -> >=",
+  "line": "if rankOf(level) > worst {",
+  "occurrence": 1,
+  "lineno": 956,
+  "reason": "> vs >= on equal ranks re-assigns the same worst rank."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "remove call statement",
+  "line": "sort.Strings(ppaths)",
+  "occurrence": 1,
+  "lineno": 971,
+  "reason": "ppaths only fills unclassified policy params with agent: iteration order cannot change the result."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "remove call statement",
+  "line": "sort.Strings(opaths)",
+  "occurrence": 1,
+  "lineno": 985,
+  "reason": "every flow refusal has the same reason and classes are only returned when nothing is refused: order-independent."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "assign true -> false",
+  "line": "minimise[f[\"path\"].(string)] = true",
+  "occurrence": 1,
+  "lineno": 1146,
+  "reason": "the minimise set is read only through its keys (sorted list): storing false instead of true changes nothing."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "assign true -> false",
+  "line": "uncovered[f[\"path\"].(string)] = true",
+  "occurrence": 1,
+  "lineno": 1148,
+  "reason": "the uncovered set is read only through its keys and len: storing false instead of true changes nothing."
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> false",
+  "line": "if artifacts == nil {",
+  "occurrence": 1,
+  "lineno": 1464,
+  "reason": "member(nil, k) is already (nil, false), so the explicit artifacts == nil short-cut is redundant."
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "binary || -> &&",
+  "line": "if typ != \"integer\" || !isS || !hasUnits || !own {",
+  "reason": "the 2nd `||` of the unit test: a non-string unit with units declared, or a string unit with none, still fails the own-key lookup (`!own`: units[\"\"] is never declared, a nil map has no keys).",
+  "occurrence": 1,
+  "lineno": 131
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if suiteAlgName(alg, algP) == \"\" {",
+  "reason": "suiteCapability returns \"\" only for an absent alg or a supported suite, and every supported suite has a non-empty name: the branch is dead.",
+  "occurrence": 1,
+  "lineno": 362
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "int 1 -> 2",
+  "line": "if !b64uOK(s[\"value\"], -1) {",
+  "reason": "DecodeB64uStrict ignores every negative wantLen: -2 and -1 both mean any length.",
+  "occurrence": 1,
+  "lineno": 368
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "unreachable: actionSchemaShapeError already required canonBytes(withoutKeys(doc, \"sig\")) to succeed.",
+  "occurrence": 8,
+  "lineno": 427
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-object doc or a non-array verbs gives a nil map / nil slice that the lookup finds nothing in: the function falls through to the same (nil, false).",
+  "occurrence": 9,
+  "lineno": 448
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-object doc or a non-array verbs gives a nil map / nil slice that the lookup finds nothing in: the function falls through to the same (nil, false).",
+  "occurrence": 10,
+  "lineno": 452
+ },
+ {
+  "crate": "go-pca",
+  "file": "action_schema.go",
+  "mutant": "if-cond -> true",
+  "line": "if ints {",
+  "reason": "min and max are only admitted by the schema on integer parameters and integer arrays, so for a string array d[\"min\"] / d[\"max\"] are absent and the range tests cannot fire.",
+  "occurrence": 2,
+  "lineno": 600
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "if-cond -> true",
+  "line": "if ok {",
+  "reason": "ok false means vs is nil, so the loop over it runs zero times: entering it changes nothing.",
+  "occurrence": 1,
+  "lineno": 401
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "bindSuiteFields fails only for a non-ed25519 suite without pq_pk; verifyPinnedSuite then refuses (needsPqPk, no pq_pk) and the && keeps the verdict false.",
+  "occurrence": 10,
+  "lineno": 527
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "return false -> true",
+  "line": "return false",
+  "reason": "bindSuiteFields fails only for a non-ed25519 suite without pq_pk; verifyPinnedSuite then refuses (needsPqPk, no pq_pk) and the && keeps the verdict false.",
+  "occurrence": 21,
+  "lineno": 528
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "bindSuiteFields fails only for a non-ed25519 suite without pq_pk; verifyPinnedSuite then refuses (needsPqPk, no pq_pk) and the && keeps the verdict false.",
+  "occurrence": 11,
+  "lineno": 609
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_acc.go",
+  "mutant": "return false -> true",
+  "line": "return false",
+  "reason": "bindSuiteFields fails only for a non-ed25519 suite without pq_pk; verifyPinnedSuite then refuses (needsPqPk, no pq_pk) and the && keeps the verdict false.",
+  "occurrence": 37,
+  "lineno": 610
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 0 -> 1",
+  "line": "func mapDimOK(dv any) bool { return mapDimError(dv, 0) == \"\" }",
+  "reason": "the second argument only numbers the dimension in the refusal text, which mapDimOK discards.",
+  "occurrence": 1,
+  "lineno": 221
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "int 0 -> 1",
+  "line": "return nil, 0, \"the action's \" + path + \" lies outside the committed map's dimension\"",
+  "reason": "the flat index is discarded when the error string is non-empty (mapCommitPrimitive callers test cerr first).",
+  "occurrence": 1,
+  "lineno": 375
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-object leaf reads as a nil map: its absent salt then fails DecodeB64uStrict and returns the same empty result.",
+  "occurrence": 6,
+  "lineno": 538
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_session.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-object pins reads as a nil map whose lookup gives (\"\", false): the same result.",
+  "occurrence": 7,
+  "lineno": 391
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_session.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "bindSuiteFields fails only for a non-ed25519 suite without pq_pk; verifyPinnedSuite then refuses and returns the same \"session root signature invalid\".",
+  "occurrence": 9,
+  "lineno": 434
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_v2.go",
+  "mutant": "if-cond -> false",
+  "line": "if r := sessionRootShape(S); r != \"\" {",
+  "reason": "verifySessionRoot starts with the same sessionRootShape check and returns the same text, which is wrapped identically (\"session root: \" + r).",
+  "occurrence": 1,
+  "lineno": 434
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> true",
+  "line": "if ok {",
+  "reason": "ok false leaves the map nil, so the member lookup finds nothing and fails the same assertion: the later !ok test refuses with the same text.",
+  "occurrence": 1,
+  "lineno": 119
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: \" + w",
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable.",
+  "occurrence": 1,
+  "lineno": 627
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "int 0 -> 1",
+  "line": "return 0, \"offers: signing key '\" + jsValueString(os[\"kid\"]) + \"' is not pinned\"",
+  "reason": "decideOfferSet's excess is discarded whenever a refusal reason is returned (decideIntentWorld fails on why != \"\"): 0 vs 1 is unobservable.",
+  "occurrence": 1,
+  "lineno": 648
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> true",
+  "line": "if ok {",
+  "reason": "ok false leaves the map nil, so the member lookup finds nothing and fails the same assertion: the later !ok test refuses with the same text.",
+  "occurrence": 2,
+  "lineno": 816
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> true",
+  "line": "if e := validateFlowRulesError(f); e != \"\" {",
+  "reason": "when validateFlowRulesError returns \"\" the branch returns \"\", which is what follows.",
+  "occurrence": 1,
+  "lineno": 866
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> false",
+  "line": "if a != b && strings.HasPrefix(b, a+\".\") {",
+  "reason": "prov keys are validated by validateProvWireError (action.params.<[A-Za-z0-9_]{1,64}>), so no path is a dotted extension of another and the overlap test can never fire.",
+  "occurrence": 1,
+  "lineno": 962
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> true",
+  "line": "if ok {",
+  "reason": "ok false leaves the map nil, so the member lookup finds nothing and fails the same assertion: the later !ok test refuses with the same text.",
+  "occurrence": 3,
+  "lineno": 1280
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_wb.go",
+  "mutant": "if-cond -> false",
+  "line": "if recover() != nil {",
+  "reason": "defensive: decideClassifierDimensions is written to never panic (every assertion follows a validated shape), so no input reaches the recover.",
+  "occurrence": 3,
+  "lineno": 1368
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 0",
+  "line": "return math.Inf(1), true",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; the earlier case already took +Inf, so IsInf(f, 0) / IsInf(f, -2) / IsInf(f, 2) select the same infinity.",
+  "occurrence": 1,
+  "lineno": 44
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "return math.Inf(1), true",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; the earlier case already took +Inf, so IsInf(f, 0) / IsInf(f, -2) / IsInf(f, 2) select the same infinity.",
+  "occurrence": 1,
+  "lineno": 44
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "return math.Inf(-1), true",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; the earlier case already took +Inf, so IsInf(f, 0) / IsInf(f, -2) / IsInf(f, 2) select the same infinity.",
+  "occurrence": 1,
+  "lineno": 46
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 64 -> +1",
+  "line": "f, err := strconv.ParseFloat(s, 64)",
+  "reason": "strconv.ParseFloat treats every bitSize other than 32 as 64.",
+  "occurrence": 1,
+  "lineno": 48
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 64 -> -1",
+  "line": "f, err := strconv.ParseFloat(s, 64)",
+  "reason": "strconv.ParseFloat treats every bitSize other than 32 as 64.",
+  "occurrence": 1,
+  "lineno": 48
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "case math.IsInf(f, 1):",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; the earlier case already took +Inf, so IsInf(f, 0) / IsInf(f, -2) / IsInf(f, 2) select the same infinity.",
+  "occurrence": 1,
+  "lineno": 137
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 0",
+  "line": "case math.IsInf(f, -1):",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; the earlier case already took +Inf, so IsInf(f, 0) / IsInf(f, -2) / IsInf(f, 2) select the same infinity.",
+  "occurrence": 1,
+  "lineno": 139
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "case math.IsInf(f, -1):",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; the earlier case already took +Inf, so IsInf(f, 0) / IsInf(f, -2) / IsInf(f, 2) select the same infinity.",
+  "occurrence": 1,
+  "lineno": 139
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "binary < -> <=",
+  "line": "if f < 0 {",
+  "reason": "f == 0 returned earlier, so f < 0 and f <= 0 agree.",
+  "occurrence": 1,
+  "lineno": 148
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "e := strconv.FormatFloat(f, 'e', -1, 64) // shortest round-trip digits: d[.ddd]e+-XX",
+  "reason": "a negative precision means shortest for FormatFloat; the mantissa contains at most one \".\", so Replace(…, 1) and (…, 2) agree.",
+  "occurrence": 1,
+  "lineno": 152
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "digits := strings.Replace(mant, \".\", \"\", 1)",
+  "reason": "a negative precision means shortest for FormatFloat; the mantissa contains at most one \".\", so Replace(…, 1) and (…, 2) agree.",
+  "occurrence": 1,
+  "lineno": 154
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "binary <= -> <",
+  "line": "case 0 < n && n <= 21:",
+  "reason": "a shortest round-trip float has at most 17 significant digits (k <= 17): the first case already takes every n in [k, 21], so the second case only sees n < k <= 17 and its bound of 21 is slack; n == 1 never reaches the third case (k == 1 is taken by the first, k > 1 by the second), so n <= 0 and n <= 1 agree.",
+  "occurrence": 1,
+  "lineno": 162
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 21 -> -1",
+  "line": "case 0 < n && n <= 21:",
+  "reason": "a shortest round-trip float has at most 17 significant digits (k <= 17): the first case already takes every n in [k, 21], so the second case only sees n < k <= 17 and its bound of 21 is slack; n == 1 never reaches the third case (k == 1 is taken by the first, k > 1 by the second), so n <= 0 and n <= 1 agree.",
+  "occurrence": 1,
+  "lineno": 162
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 0 -> 1",
+  "line": "case -6 < n && n <= 0:",
+  "reason": "a shortest round-trip float has at most 17 significant digits (k <= 17): the first case already takes every n in [k, 21], so the second case only sees n < k <= 17 and its bound of 21 is slack; n == 1 never reaches the third case (k == 1 is taken by the first, k > 1 by the second), so n <= 0 and n <= 1 agree.",
+  "occurrence": 1,
+  "lineno": 164
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "binary < -> <=",
+  "line": "if n-1 < 0 {",
+  "reason": "the exponent branch is only reached for n <= -6 or n >= 22: n-1 < 0 and its variants split those ranges identically, and ev is never 0.",
+  "occurrence": 1,
+  "lineno": 168
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "binary - -> +",
+  "line": "if n-1 < 0 {",
+  "reason": "the exponent branch is only reached for n <= -6 or n >= 22: n-1 < 0 and its variants split those ranges identically, and ev is never 0.",
+  "occurrence": 1,
+  "lineno": 168
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 0",
+  "line": "if n-1 < 0 {",
+  "reason": "the exponent branch is only reached for n <= -6 or n >= 22: n-1 < 0 and its variants split those ranges identically, and ev is never 0.",
+  "occurrence": 1,
+  "lineno": 168
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "if n-1 < 0 {",
+  "reason": "the exponent branch is only reached for n <= -6 or n >= 22: n-1 < 0 and its variants split those ranges identically, and ev is never 0.",
+  "occurrence": 1,
+  "lineno": 168
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 0 -> 1",
+  "line": "if n-1 < 0 {",
+  "reason": "the exponent branch is only reached for n <= -6 or n >= 22: n-1 < 0 and its variants split those ranges identically, and ev is never 0.",
+  "occurrence": 1,
+  "lineno": 168
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "binary < -> <=",
+  "line": "if ev < 0 {",
+  "reason": "the exponent branch is only reached for n <= -6 or n >= 22: n-1 < 0 and its variants split those ranges identically, and ev is never 0.",
+  "occurrence": 1,
+  "lineno": 172
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 0 -> 1",
+  "line": "if ev < 0 {",
+  "reason": "the exponent branch is only reached for n <= -6 or n >= 22: n-1 < 0 and its variants split those ranges identically, and ev is never 0.",
+  "occurrence": 1,
+  "lineno": 172
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "if-cond -> false",
+  "line": "if !hasLoneSurrogate(s) {",
+  "reason": "the loop below writes the unchanged bytes when no lone surrogate exists: the fast path only avoids the copy.",
+  "occurrence": 1,
+  "lineno": 241
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 0",
+  "line": "if s[i] == 0xED && i+2 < len(s) && s[i+1] >= 0xA0 && s[i+1] <= 0xBF {",
+  "reason": "WTF-8 strings come from the strict parser: after 0xED 0xA0..0xBF the continuation bytes are always <= 0xBF, and 0xED followed by 0x80..0x9F decodes to the same unit through the 3-byte formula as through the normal path.",
+  "occurrence": 2,
+  "lineno": 246
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "if-cond -> false",
+  "line": "if a == b {",
+  "reason": "equal strings compare equal through the byte comparison and the unit comparison below.",
+  "occurrence": 1,
+  "lineno": 260
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "binary < -> <=",
+  "line": "if x[i] < y[i] {",
+  "reason": "the comparison sits inside x[i] != y[i], so equality cannot occur.",
+  "occurrence": 1,
+  "lineno": 273
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 0",
+  "line": "for i := 1; i < len(s); i++ {",
+  "reason": "the first character is already checked to be a-z, which is also in [a-z0-9_].",
+  "occurrence": 1,
+  "lineno": 302
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "if-cond -> false",
+  "line": "if s == \"\" {",
+  "reason": "the empty string splits to one empty segment, which the segment loop refuses.",
+  "occurrence": 1,
+  "lineno": 333
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 2",
+  "line": "if c == 0xED && i+2 < len(s) && s[i+1] >= 0xA0 && s[i+1] <= 0xBF {",
+  "reason": "WTF-8 strings come from the strict parser: after 0xED 0xA0..0xBF the continuation bytes are always <= 0xBF, and 0xED followed by 0x80..0x9F decodes to the same unit through the 3-byte formula as through the normal path.",
+  "occurrence": 1,
+  "lineno": 497
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 0xBF -> +1",
+  "line": "if c == 0xED && i+2 < len(s) && s[i+1] >= 0xA0 && s[i+1] <= 0xBF {",
+  "reason": "WTF-8 strings come from the strict parser: after 0xED 0xA0..0xBF the continuation bytes are always <= 0xBF, and 0xED followed by 0x80..0x9F decodes to the same unit through the 3-byte formula as through the normal path.",
+  "occurrence": 1,
+  "lineno": 497
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "int 1 -> 0",
+  "line": "for i := 1; i < len(ks); i++ {",
+  "reason": "insertion sort: starting at index 0 runs an empty inner loop, and map keys are distinct so compareUtf8 never returns 0 (>= and > agree).",
+  "occurrence": 1,
+  "lineno": 545
+ },
+ {
+  "crate": "go-pca",
+  "file": "jsval.go",
+  "mutant": "binary > -> >=",
+  "line": "for j := i; j > 0 && compareUtf8(ks[j-1], ks[j]) > 0; j-- {",
+  "reason": "insertion sort: starting at index 0 runs an empty inner loop, and map keys are distinct so compareUtf8 never returns 0 (>= and > agree).",
+  "occurrence": 1,
+  "lineno": 546
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-string reads as \"\": DecodeB64uStrict accepts it as zero bytes and sigLenOK(0) is false for every primitive.",
+  "occurrence": 2,
+  "lineno": 137
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "return false -> true",
+  "line": "return false",
+  "reason": "the exact key-length guard at the top of pqVerifyRaw leaves UnmarshalBinary nothing to reject (circl only checks the length for ML-DSA and SLH-DSA public keys), so the error branch is unreachable.",
+  "occurrence": 6,
+  "lineno": 259
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "return false -> true",
+  "line": "return false",
+  "reason": "the exact key-length guard at the top of pqVerifyRaw leaves UnmarshalBinary nothing to reject (circl only checks the length for ML-DSA and SLH-DSA public keys), so the error branch is unreachable.",
+  "occurrence": 7,
+  "lineno": 269
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "return false -> true",
+  "line": "return false",
+  "reason": "unreachable: every primitive with a non-zero key length has its own case that returns, and the guard above refuses the rest.",
+  "occurrence": 8,
+  "lineno": 275
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "if-cond -> false",
+  "line": "if !ok {",
+  "reason": "a non-string pq_sig reads as \"\": pqVerifyB64u decodes it to zero bytes and sigLenOK(0) is false for every primitive.",
+  "occurrence": 10,
+  "lineno": 388
+ },
+ {
+  "crate": "go-pca",
+  "file": "pq.go",
+  "mutant": "return false -> true",
+  "line": "return false",
+  "reason": "verifyB64u already decoded the same sigStr to exactly sigLen bytes a few lines earlier, so the second decode cannot fail.",
+  "occurrence": 17,
+  "lineno": 395
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 64 -> +1",
+  "line": "maxBoundedRepeatSafeSource = 64",
+  "reason": "the guard's bounded-repeat limit duplicates the parser's: any quantifier it rejects (max or min above maxRegexRepeat = 64) is also refused by compileSafeRegex, the final conjunct of isSafeRegexSource, so no verdict changes.",
+  "occurrence": 1,
+  "lineno": 22
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 2 -> +1",
+  "line": "type charRange [2]int",
+  "reason": "charRange literals always carry two elements and are only indexed [0] and [1]; a third zero element is never read or compared.",
+  "occurrence": 1,
+  "lineno": 28
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "mid := (lo + hi) >> 1",
+  "reason": "with mid = lo+hi the search starts at lo = 0 and mid = hi, so it scans the sorted disjoint ranges downward; lo moves only past hi, ending the loop: the same membership answer.",
+  "occurrence": 1,
+  "lineno": 39
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary < -> <=",
+  "line": "sort.SliceStable(s, func(i, j int) bool { return s[i][0] < s[j][0] })",
+  "reason": "ranges with equal starts are merged by the loop below whatever their order: the normalised union is order independent.",
+  "occurrence": 1,
+  "lineno": 63
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary > -> >=",
+  "line": "if r[1] > out[n-1][1] {",
+  "reason": "when the ends are equal the assignment writes the value already there.",
+  "occurrence": 1,
+  "lineno": 67
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if len(items) == 1 {",
+  "reason": "an alternation of one item emits exactly the program of that item (the split/jmp bookkeeping is skipped for the last item).",
+  "occurrence": 1,
+  "lineno": 141
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "if len(items) == 1 {",
+  "reason": "an alternation of one item emits exactly the program of that item (the split/jmp bookkeeping is skipped for the last item).",
+  "occurrence": 1,
+  "lineno": 141
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary < -> <=",
+  "line": "if window >= 0 && i+window < end {",
+  "reason": "when i+window equals end the assignment end = i+window writes the value end already has.",
+  "occurrence": 1,
+  "lineno": 160
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary < -> <=",
+  "line": "for j < end && s[j] >= '0' && s[j] <= '9' && (maxDigits < 0 || j-d0 < maxDigits) {",
+  "reason": "maxDigits is only ever -1 (unlimited) or 4: maxDigits < 0 and maxDigits <= 0 / < 1 agree.",
+  "occurrence": 1,
+  "lineno": 169
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 0 -> 1",
+  "line": "for j < end && s[j] >= '0' && s[j] <= '9' && (maxDigits < 0 || j-d0 < maxDigits) {",
+  "reason": "maxDigits is only ever -1 (unlimited) or 4: maxDigits < 0 and maxDigits <= 0 / < 1 agree.",
+  "occurrence": 1,
+  "lineno": 169
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary < -> <=",
+  "line": "for k < end && s[k] >= '0' && s[k] <= '9' && (maxDigits < 0 || k-e0 < maxDigits) {",
+  "reason": "maxDigits is only ever -1 (unlimited) or 4: maxDigits < 0 and maxDigits <= 0 / < 1 agree.",
+  "occurrence": 1,
+  "lineno": 179
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 0 -> 1",
+  "line": "for k < end && s[k] >= '0' && s[k] <= '9' && (maxDigits < 0 || k-e0 < maxDigits) {",
+  "reason": "maxDigits is only ever -1 (unlimited) or 4: maxDigits < 0 and maxDigits <= 0 / < 1 agree.",
+  "occurrence": 1,
+  "lineno": 179
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> true",
+  "line": "if !emptyHi {",
+  "reason": "digitsValue of the empty digit run is 0, so hi is 0 whether or not the empty-upper-bound guard runs; every caller ignores hi when emptyHi.",
+  "occurrence": 1,
+  "lineno": 185
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "min, max = 0, -1",
+  "reason": "max = -2 behaves as -1: only max < 0 and max >= 0 are ever tested.",
+  "occurrence": 1,
+  "lineno": 219
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "min, max = 1, -1",
+  "reason": "max = -2 behaves as -1: only max < 0 and max >= 0 are ever tested.",
+  "occurrence": 1,
+  "lineno": 222
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 16 -> +1",
+  "line": "lo, hi, comma, emptyHi, n, ok := braceQuant(p.s, p.i, 16, 4)",
+  "reason": "a quantifier token is at most 11 code units ({, four digits, comma, four digits, }), so any window >= 11 reads the same units.",
+  "occurrence": 1,
+  "lineno": 228
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 16 -> -1",
+  "line": "lo, hi, comma, emptyHi, n, ok := braceQuant(p.s, p.i, 16, 4)",
+  "reason": "a quantifier token is at most 11 code units ({, four digits, comma, four digits, }), so any window >= 11 reads the same units.",
+  "occurrence": 1,
+  "lineno": 228
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "remove call statement",
+  "line": "panic(regexRefuse{})",
+  "reason": "without the panic the malformed brace parses as {0,0} consuming nothing; the next parse step then meets '{' as an atom start, which atom() refuses: the same refusal.",
+  "occurrence": 2,
+  "lineno": 230
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "max = -1",
+  "reason": "max = -2 behaves as -1: only max < 0 and max >= 0 are ever tested.",
+  "occurrence": 1,
+  "lineno": 237
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary >= -> >",
+  "line": "if (max >= 0 && max > maxRegexRepeat) || min > maxRegexRepeat {",
+  "reason": "max >= 0 is implied by max > maxRegexRepeat, so the extra guard (or its bound) changes nothing.",
+  "occurrence": 1,
+  "lineno": 251
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 0 -> 1",
+  "line": "if (max >= 0 && max > maxRegexRepeat) || min > maxRegexRepeat {",
+  "reason": "max >= 0 is implied by max > maxRegexRepeat, so the extra guard (or its bound) changes nothing.",
+  "occurrence": 1,
+  "lineno": 251
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary || -> &&",
+  "line": "if c2, ok := p.at(p.i); !ok || c2 != ')' {",
+  "reason": "alt() returns only at the end of the source or at ')' (cat stops at '|' and ')' and consumes everything else or panics), so a present next unit is always ')'.",
+  "occurrence": 1,
+  "lineno": 274
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 0 -> 1",
+  "line": "d := 0",
+  "reason": "d is assigned in every switch branch (default included) before it is read.",
+  "occurrence": 1,
+  "lineno": 307
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "return &charSet{ranges: reDigit}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 332
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "return &charSet{ranges: reDigit}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 332
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "return &charSet{ranges: reDigit, negated: true}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 334
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "return &charSet{ranges: reDigit, negated: true}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 334
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "return &charSet{ranges: reWord}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 336
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "return &charSet{ranges: reWord}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 336
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "return &charSet{ranges: reWord, negated: true}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 338
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "return &charSet{ranges: reWord, negated: true}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 338
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "return &charSet{ranges: reSpace}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 340
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "return &charSet{ranges: reSpace}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 340
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "return &charSet{ranges: reSpace, negated: true}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 342
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "return &charSet{ranges: reSpace, negated: true}, true, -1",
+  "reason": "the third result (the single code unit, -1 for a class escape) is never read for a class escape: readAtom ignores it when either side is a class and atom() discards it.",
+  "occurrence": 1,
+  "lineno": 342
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary + -> -",
+  "line": "if p.i+2 > len(p.s) || !isHex(p.s[p.i]) || !isHex(p.s[p.i+1]) {",
+  "reason": "the explicit length guard is redundant: without it the index p.s[p.i] / p.s[p.i+1] panics (index checks use len) and compileSafeRegex recovers to the same refusal.",
+  "occurrence": 1,
+  "lineno": 359
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 2 -> -1",
+  "line": "if p.i+2 > len(p.s) || !isHex(p.s[p.i]) || !isHex(p.s[p.i+1]) {",
+  "reason": "the explicit length guard is redundant: without it the index p.s[p.i] / p.s[p.i+1] panics (index checks use len) and compileSafeRegex recovers to the same refusal.",
+  "occurrence": 1,
+  "lineno": 359
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "remove call statement",
+  "line": "panic(regexRefuse{})",
+  "reason": "'b' outside a class falls through to the letter test below, which refuses it with the same panic.",
+  "occurrence": 15,
+  "lineno": 388
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary >= -> >",
+  "line": "if c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' {",
+  "reason": "the '0' candidate is taken by the `case '0'` branch above, so this test never sees it; the letter and underscore bounds are exercised.",
+  "occurrence": 1,
+  "lineno": 390
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "remove call statement",
+  "line": "panic(regexRefuse{})",
+  "reason": "without the panic the next read p.s[p.i] indexes past the end, which panics and is recovered to the same refusal.",
+  "occurrence": 17,
+  "lineno": 420
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if len(*prog) > maxNFAInstructions {",
+  "reason": "the in-flight size checks only abort an oversize program sooner: every program over maxNFAInstructions (a length of exactly the limit at an entry point included, because Match is appended) is refused by compileSafeRegex's final length check.",
+  "occurrence": 1,
+  "lineno": 455
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary > -> >=",
+  "line": "if len(*prog) > maxNFAInstructions {",
+  "reason": "the in-flight size checks only abort an oversize program sooner: every program over maxNFAInstructions (a length of exactly the limit at an entry point included, because Match is appended) is refused by compileSafeRegex's final length check.",
+  "occurrence": 1,
+  "lineno": 455
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "remove call statement",
+  "line": "panic(regexRefuse{})",
+  "reason": "the in-flight size checks only abort an oversize program sooner: every program over maxNFAInstructions (a length of exactly the limit at an entry point included, because Match is appended) is refused by compileSafeRegex's final length check.",
+  "occurrence": 19,
+  "lineno": 456
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "*prog = append(*prog, reInst{op: regexOpSplit, x: split + 1, y: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 1,
+  "lineno": 474
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "*prog = append(*prog, reInst{op: regexOpSplit, x: split + 1, y: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 1,
+  "lineno": 474
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "*prog = append(*prog, reInst{op: regexOpJmp, x: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 1,
+  "lineno": 477
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "*prog = append(*prog, reInst{op: regexOpJmp, x: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 1,
+  "lineno": 477
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "*prog = append(*prog, reInst{op: regexOpSplit, x: split + 1, y: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 2,
+  "lineno": 492
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "*prog = append(*prog, reInst{op: regexOpSplit, x: split + 1, y: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 2,
+  "lineno": 492
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "*prog = append(*prog, reInst{op: regexOpSplit, x: len(*prog) + 1, y: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 1,
+  "lineno": 500
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "*prog = append(*prog, reInst{op: regexOpSplit, x: len(*prog) + 1, y: -1})",
+  "reason": "the -1 is a placeholder that is overwritten before the program runs.",
+  "occurrence": 1,
+  "lineno": 500
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if len(*prog) > maxNFAInstructions {",
+  "reason": "the in-flight size checks only abort an oversize program sooner: every program over maxNFAInstructions (a length of exactly the limit at an entry point included, because Match is appended) is refused by compileSafeRegex's final length check.",
+  "occurrence": 2,
+  "lineno": 507
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary > -> >=",
+  "line": "if len(*prog) > maxNFAInstructions {",
+  "reason": "the in-flight size checks only abort an oversize program sooner: every program over maxNFAInstructions (a length of exactly the limit at an entry point included, because Match is appended) is refused by compileSafeRegex's final length check.",
+  "occurrence": 2,
+  "lineno": 507
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "remove call statement",
+  "line": "panic(regexRefuse{})",
+  "reason": "the in-flight size checks only abort an oversize program sooner: every program over maxNFAInstructions (a length of exactly the limit at an entry point included, because Match is appended) is refused by compileSafeRegex's final length check.",
+  "occurrence": 20,
+  "lineno": 508
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "mark[i] = -1",
+  "reason": "mark entries only have to differ from gen, which is >= 1 after the first increment: -1, 0 and -2 are equally unmatched.",
+  "occurrence": 1,
+  "lineno": 540
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "mark[i] = -1",
+  "reason": "mark entries only have to differ from gen, which is >= 1 after the first increment: -1, 0 and -2 are equally unmatched.",
+  "occurrence": 1,
+  "lineno": 540
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 0 -> 1",
+  "line": "gen := 0",
+  "reason": "gen is incremented before its first use: any start value works.",
+  "occurrence": 1,
+  "lineno": 542
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 0 -> 1",
+  "line": "stack := make([]int, 0, len(prog)*2+2)",
+  "reason": "the stack capacity is only a hint (append grows it).",
+  "occurrence": 1,
+  "lineno": 543
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary + -> -",
+  "line": "stack := make([]int, 0, len(prog)*2+2)",
+  "reason": "the stack capacity is only a hint (append grows it).",
+  "occurrence": 1,
+  "lineno": 543
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary * -> /",
+  "line": "stack := make([]int, 0, len(prog)*2+2)",
+  "reason": "the stack capacity is only a hint (append grows it).",
+  "occurrence": 1,
+  "lineno": 543
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 2 -> +1",
+  "line": "stack := make([]int, 0, len(prog)*2+2)",
+  "reason": "the stack capacity is only a hint (append grows it).",
+  "occurrence": 1,
+  "lineno": 543,
+  "multiplicity": 2
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 2 -> -1",
+  "line": "stack := make([]int, 0, len(prog)*2+2)",
+  "reason": "the stack capacity is only a hint (append grows it).",
+  "occurrence": 1,
+  "lineno": 543,
+  "multiplicity": 2
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if cn == 0 && !matched {",
+  "reason": "with no live thread the remaining positions do nothing and matched stays false, which is what the early return reports.",
+  "occurrence": 1,
+  "lineno": 592
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 2 -> +1",
+  "line": "const prevNone, prevAtom, prevFrame = 0, 1, 2",
+  "reason": "the three labels only need to be distinct; 3 is distinct from 0 and 1.",
+  "occurrence": 1,
+  "lineno": 604
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "n := src[i+1]",
+  "reason": "backreference escapes (\\1-\\9, \\k) are also refused by the parser (escapeInner refuses digits and letters), the final conjunct of isSafeRegexSource.",
+  "occurrence": 1,
+  "lineno": 615
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary || -> &&",
+  "line": "if n >= '1' && n <= '9' || n == 'k' {",
+  "reason": "backreference escapes (\\1-\\9, \\k) are also refused by the parser (escapeInner refuses digits and letters), the final conjunct of isSafeRegexSource.",
+  "occurrence": 1,
+  "lineno": 616
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary >= -> >",
+  "line": "if n >= '1' && n <= '9' || n == 'k' {",
+  "reason": "backreference escapes (\\1-\\9, \\k) are also refused by the parser (escapeInner refuses digits and letters), the final conjunct of isSafeRegexSource.",
+  "occurrence": 1,
+  "lineno": 616
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary <= -> <",
+  "line": "if n >= '1' && n <= '9' || n == 'k' {",
+  "reason": "backreference escapes (\\1-\\9, \\k) are also refused by the parser (escapeInner refuses digits and letters), the final conjunct of isSafeRegexSource.",
+  "occurrence": 1,
+  "lineno": 616
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "j := i + 1",
+  "reason": "the start of the class scan only skips an optional '^', which the scan treats as ordinary data anyway: starting at '[' or not skipping '^' reaches the same closing bracket.",
+  "occurrence": 1,
+  "lineno": 624
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if j < len(src) && src[j] == '^' {",
+  "reason": "the start of the class scan only skips an optional '^', which the scan treats as ordinary data anyway: starting at '[' or not skipping '^' reaches the same closing bracket.",
+  "occurrence": 1,
+  "lineno": 625
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "++ -> --",
+  "line": "j++",
+  "reason": "the start of the class scan only skips an optional '^', which the scan treats as ordinary data anyway: starting at '[' or not skipping '^' reaches the same closing bracket.",
+  "occurrence": 3,
+  "lineno": 626
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if j >= len(src) {",
+  "reason": "an unterminated class is refused by compileSafeRegex, the final conjunct of isSafeRegexSource.",
+  "occurrence": 1,
+  "lineno": 633
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary >= -> >",
+  "line": "if j >= len(src) {",
+  "reason": "an unterminated class is refused by compileSafeRegex, the final conjunct of isSafeRegexSource.",
+  "occurrence": 1,
+  "lineno": 633
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "i = j + 1",
+  "reason": "resuming at the closing ']' reads it as one ordinary atom, setting prev = atom exactly as the class did.",
+  "occurrence": 1,
+  "lineno": 636
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "if i+1 < len(src) && src[i+1] == '?' {",
+  "reason": "differs only when '(' '?' ends the source, or for '(?' not followed by ':', both refused by the parser (an unterminated group; '(?' other than '(?:').",
+  "occurrence": 1,
+  "lineno": 641
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if !(i+2 < len(src) && src[i+2] == ':') {",
+  "reason": "differs only when '(' '?' ends the source, or for '(?' not followed by ':', both refused by the parser (an unterminated group; '(?' other than '(?:').",
+  "occurrence": 1,
+  "lineno": 642
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 2 -> +1",
+  "line": "if !(i+2 < len(src) && src[i+2] == ':') {",
+  "reason": "differs only when '(' '?' ends the source, or for '(?' not followed by ':', both refused by the parser (an unterminated group; '(?' other than '(?:').",
+  "occurrence": 1,
+  "lineno": 642
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 3 -> -1",
+  "line": "i += 3",
+  "reason": "reading the ':' of '(?:' as one more atom only changes prev for an immediately following quantifier, which the parser refuses anyway ('(?:*', '(?:+', '(?:?', '(?:{').",
+  "occurrence": 1,
+  "lineno": 645
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 0 -> 1",
+  "line": "qlen := 0",
+  "reason": "qlen is assigned in every branch that sets isQ before it is read.",
+  "occurrence": 1,
+  "lineno": 677
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "isQ, qlen, unbounded, qmax, options = true, 1, true, math.Inf(1), math.Inf(1)",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 683,
+  "multiplicity": 2
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "isQ, qlen, unbounded, qmax, options = true, 1, true, math.Inf(1), math.Inf(1)",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 683,
+  "multiplicity": 2
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "isQ, qlen, qmax, options = true, 1, 1, 2",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 685
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "isQ, qlen, qmax, options = true, 1, 1, 2",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 685
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "lo, hi, comma, emptyHi, n, ok := braceQuant(src, i, -1, -1)",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 687,
+  "multiplicity": 2
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "h = math.Inf(1)",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 694
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "h = math.Inf(1)",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 694
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if h < lo {",
+  "reason": "a quantifier whose upper bound is below its lower bound is refused by the parser (max < min), the final conjunct of isSafeRegexSource.",
+  "occurrence": 1,
+  "lineno": 699
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "isQ, qlen, unbounded, qmax = true, n, math.IsInf(h, 1), h",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 702
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "isQ, qlen, unbounded, qmax = true, n, math.IsInf(h, 1), h",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 702
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if math.IsInf(h, 1) {",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 703
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "if math.IsInf(h, 1) {",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 703
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "if math.IsInf(h, 1) {",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 703
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "options = math.Inf(1)",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 704
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "options = math.Inf(1)",
+  "reason": "math.Inf(sign) is +Inf for any sign >= 0 and -Inf for any sign < 0; qmax is only compared with 64 and tested with IsInf, options with 1; braceQuant only tests window and maxDigits for < 0; and +Inf - lo + 1 is +Inf.",
+  "occurrence": 1,
+  "lineno": 704
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> false",
+  "line": "if prev == prevNone {",
+  "reason": "a quantifier with nothing before it is refused by the parser (atom() refuses '*', '+', '?' and '{' as an atom start).",
+  "occurrence": 1,
+  "lineno": 710
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "remove !",
+  "line": "if !unbounded && !math.IsInf(qmax, 1) && qmax > maxBoundedRepeatSafeSource {",
+  "reason": "the guard's bounded-repeat limit duplicates the parser's: any quantifier it rejects (max or min above maxRegexRepeat = 64) is also refused by compileSafeRegex, the final conjunct of isSafeRegexSource, so no verdict changes.",
+  "occurrence": 1,
+  "lineno": 716,
+  "multiplicity": 2
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "if !unbounded && !math.IsInf(qmax, 1) && qmax > maxBoundedRepeatSafeSource {",
+  "reason": "the guard's bounded-repeat limit duplicates the parser's: any quantifier it rejects (max or min above maxRegexRepeat = 64) is also refused by compileSafeRegex, the final conjunct of isSafeRegexSource, so no verdict changes.",
+  "occurrence": 1,
+  "lineno": 716
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 2",
+  "line": "if !unbounded && !math.IsInf(qmax, 1) && qmax > maxBoundedRepeatSafeSource {",
+  "reason": "the guard's bounded-repeat limit duplicates the parser's: any quantifier it rejects (max or min above maxRegexRepeat = 64) is also refused by compileSafeRegex, the final conjunct of isSafeRegexSource, so no verdict changes.",
+  "occurrence": 1,
+  "lineno": 716
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "if-cond -> true",
+  "line": "} else if options > 1 {",
+  "reason": "ceil(log2(options)) is 0 for options == 1 and options >= 1 whenever the upper bound is not below the lower bound (refused earlier / by the parser).",
+  "occurrence": 1,
+  "lineno": 721
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "binary > -> >=",
+  "line": "} else if options > 1 {",
+  "reason": "ceil(log2(options)) is 0 for options == 1 and options >= 1 whenever the upper bound is not below the lower bound (refused earlier / by the parser).",
+  "occurrence": 1,
+  "lineno": 721
+ },
+ {
+  "crate": "go-pca",
+  "file": "saferegex.go",
+  "mutant": "int 1 -> 0",
+  "line": "} else if options > 1 {",
+  "reason": "ceil(log2(options)) is 0 for options == 1 and options >= 1 whenever the upper bound is not below the lower bound (refused earlier / by the parser).",
+  "occurrence": 1,
+  "lineno": 721
+ },
+ {
+  "crate": "go-pca",
+  "file": "intent_map.go",
+  "mutant": "binary > -> >=",
+  "line": "if !ok || len(leaves) == 0 || len(leaves) > maxMapLeaves {",
+  "reason": "NOT equivalent: killed by TestMapCommitLeafCapBoundary (PCA_HUGE=1; about 13 GB RSS, ~1 min), which exactly 1<<24 leaves must commit and 1<<24+1 must not. CI mutation job (4 GiB ulimit, PCA_HUGE unset) cannot run it, so it stays a survivor there. Verified on the GCP box on 2026-10-21: original passes, the >= mutant fails (\"exactly 16777216 leaves must commit, got map[]\").",
+  "occurrence": 1,
+  "lineno": 532
  }
 ]

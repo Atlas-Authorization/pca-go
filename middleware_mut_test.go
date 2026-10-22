@@ -136,6 +136,19 @@ func TestMutWritePCAError(t *testing.T) {
 		{"", &Verdict{Checks: map[string]bool{"a": true}}, `PCA realm="pca", error="x_code"`, []string{"checks", "error"}},
 		{"d", &Verdict{Reason: "r", Checks: map[string]bool{"a": false}}, `PCA realm="pca", error="x_code", error_description="d"`, []string{"checks", "error", "error_description", "reason"}},
 	}
+	// writePCAErrorReason: request-derived text (CR/LF included) stays out of the header, lands JSON-encoded in the body
+	{
+		rec := httptest.NewRecorder()
+		evil := "x\"\r\nSet-Cookie: pwned=1"
+		writePCAErrorReason(rec, 403, "x_code", evil, &Verdict{Reason: evil})
+		if got := rec.Header().Get("WWW-Authenticate"); got != `PCA realm="pca", error="x_code"` {
+			t.Fatalf("reason challenge %q", got)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body["error_description"] != evil || body["reason"] != evil {
+			t.Fatalf("reason body %v %v", body, err)
+		}
+	}
 	for i, c := range cases {
 		rec := httptest.NewRecorder()
 		writePCAError(rec, 418, "x_code", c.desc, c.verdict)
@@ -259,6 +272,10 @@ func TestMutRequirePCAErrors(t *testing.T) {
 	if rec.Code != 403 || called || b["error"] != "insufficient_authority" || b["error_description"] != b["reason"] ||
 		!strings.HasPrefix(fmt.Sprint(b["reason"]), "audience: ") {
 		t.Fatalf("verdict: %d %v", rec.Code, b)
+	}
+	// 0.4.2 audit: the verdict reason never reaches the WWW-Authenticate header
+	if wa := rec.Header().Get("WWW-Authenticate"); wa != `PCA realm="pca", error="insufficient_authority"` {
+		t.Fatalf("verdict challenge %q", wa)
 	}
 }
 
