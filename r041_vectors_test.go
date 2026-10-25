@@ -46,8 +46,8 @@ func TestR041ShareVectors(t *testing.T) {
 			}
 		})
 	}
-	if ran+skipped != 20 || skipped != 2 {
-		t.Fatalf("expected 20 r041-share vectors (2 skipped for ml-dsa-87 / slh-dsa-sha2-128f), ran %d skipped %d", ran, skipped)
+	if ran+skipped != 20 || skipped != 0 {
+		t.Fatalf("expected 20 r041-share vectors, all run (Go implements ml-dsa-87 and slh-dsa-sha2-128f), ran %d skipped %d", ran, skipped)
 	}
 }
 

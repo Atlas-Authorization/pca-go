@@ -290,13 +290,13 @@ func TestMutFromContext(t *testing.T) {
 }
 
 func TestMutResolveSigAlg(t *testing.T) {
-	if s, ok := resolveSigAlg(nil, false); !ok || s.alg != "ed25519" || !s.hasEd25519 || s.hasMlDsa || s.needsPqPk || s.needsPqSig || s.sigBytes != 64 {
+	if s, ok := resolveSigAlg(nil, false); !ok || s.alg != "ed25519" || !s.hasEd25519 || s.pq != pqNone || s.needsPqPk || s.needsPqSig || s.sigBytes != 64 {
 		t.Fatal("default")
 	}
-	if s, ok := resolveSigAlg("ml-dsa-65", true); !ok || s.hasEd25519 || !s.hasMlDsa || !s.needsPqPk || s.needsPqSig || s.sigBytes != 3309 {
+	if s, ok := resolveSigAlg("ml-dsa-65", true); !ok || s.hasEd25519 || s.pq != pqMlDsa65 || !s.needsPqPk || s.needsPqSig || s.sigBytes != 3309 {
 		t.Fatal("ml-dsa")
 	}
-	if s, ok := resolveSigAlg("hybrid-ed25519-ml-dsa-65", true); !ok || !s.hasEd25519 || !s.hasMlDsa || !s.needsPqPk || !s.needsPqSig || s.sigBytes != 64 {
+	if s, ok := resolveSigAlg("hybrid-ed25519-ml-dsa-65", true); !ok || !s.hasEd25519 || s.pq != pqMlDsa65 || !s.needsPqPk || !s.needsPqSig || s.sigBytes != 64 {
 		t.Fatal("hybrid")
 	}
 	for _, a := range []any{5, nil, "nope", "", "ML-DSA-65", "ed448"} {

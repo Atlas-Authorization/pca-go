@@ -237,7 +237,10 @@ func TestR041ShareWireUnit(t *testing.T) {
 		{"hybrid sig 3309", base(map[string]any{"alg": "hybrid-ed25519-ml-dsa-65", "sig": sig(3309), "pq_sig": sig(3309)}), false},
 		{"alg null", base(map[string]any{"alg": nil, "sig": sig(64)}), false},
 		{"alg number", base(map[string]any{"alg": r041num("1"), "sig": sig(64)}), false},
-		{"alg unknown", base(map[string]any{"alg": "ml-dsa-87", "sig": sig(4627)}), false},
+		{"ml-dsa-87", base(map[string]any{"alg": "ml-dsa-87", "sig": sig(4627)}), true},
+		{"ml-dsa-87 3309", base(map[string]any{"alg": "ml-dsa-87", "sig": sig(3309)}), false},
+		{"unsupported fn-dsa-512", base(map[string]any{"alg": "fn-dsa-512", "sig": sig(666)}), false},
+		{"alg unknown", base(map[string]any{"alg": "ml-dsa-99", "sig": sig(4627)}), false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
