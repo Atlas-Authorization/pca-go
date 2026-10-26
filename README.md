@@ -69,10 +69,21 @@ are enforced exactly like delegated ones) followed by the caveats the delegation
 `not_before`, `rate`, `max_blast_radius`, `reversibility_max`, `delegation_depth`, `budget_alloc` and `max_spend`; any other
 type is unsatisfied (fail closed). The `PCA-Action` header must be strict unpadded base64url of UTF-8 text (`pca.DecodePCAHeader(value)`).
 
+## What a passing result does not cover
+
+`counter: pass` is a format check (a non-negative integer); it does **not** mean the action was not replayed.
+Verification is stateless and this package has no replay store, so the resource server must persist, per grant and
+agent, the last accepted counter and refuse anything not strictly greater, atomically across all of its processes.
+
+The `RequirePCA` middleware runs the core verifier only. It does not check replay, revocation, caveats, envelope predicates, plan
+authorization, risk or thresholds, and it does not compare the request body with the signed `params_digest`. Do those
+checks in your handler (the caveat helpers above, the params digest of the body you will execute, your replay and
+revocation stores), or delegate the decision to a full verifier such as `requirePCA` from `@atlasauth/pca`.
+
 ## Conformance
 
 The repo ships a vendored copy of the shared **conformance corpus** (`conformance/vectors.json` +
-`conformance/keys.json`): over a hundred golden and adversarial PCActns with their expected verdicts,
+`conformance/keys.json`): 676 golden and adversarial PCActns with their expected verdicts,
 plus canonical-JSON, strict-base64url, and Merkle primitive vectors. `go test ./...` runs the verifier
 against every vector; it must reproduce `allow` and every listed check exactly.
 

@@ -89,6 +89,8 @@ type v2Check struct {
 
 type v2Decision struct {
 	checks []v2Check
+	// env is the predicate env the checks computed (canon, acc, mon, world, prov, class), read by Authorize (TS v2Env)
+	env map[string]any
 }
 
 type v2Fail string
@@ -859,7 +861,7 @@ func decideLayerCeilings(layers any, actx map[string]any) string {
 
 // decideIntentV2 runs the v2 checks in order (never panics: a panic fails the check being evaluated).
 func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) v2Decision {
-	out := v2Decision{}
+	out := v2Decision{env: map[string]any{}}
 	_, present := p["intent_session"]
 	if ce := intentV2ContextError(ctx); ce != "" {
 		// a malformed verifier context fails closed: every v2 check that could be reported fails with the reason
@@ -908,6 +910,7 @@ func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) 
 				panic(v2Fail("canonical projection"))
 			}
 			canon = c
+			out.env["canon"] = c
 			return ""
 		})
 	}
@@ -938,7 +941,10 @@ func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) 
 		return out
 	}
 	run("accumulators", func() string {
-		_, why := accStep(p, ctx, now)
+		env, why := accStep(p, ctx, now)
+		for k, v := range env {
+			out.env[k] = v
+		}
 		return why
 	})
 	if mapActive {
@@ -961,6 +967,13 @@ func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) 
 		aud, _ := p["aud"].(string)
 		wb = decideIntentWB(now, aud, is["session"].(string), actx["action"].(map[string]any), is, artifacts, policy)
 	}()
+	if !wb.skip && wb.outcome != "deny" {
+		for _, k := range []string{"world", "prov", "class"} {
+			if v, has := wb.env[k]; has && v != nil {
+				out.env[k] = v
+			}
+		}
+	}
 	if !wb.skip {
 		for _, name := range []string{"facts", "provenance", "classes"} {
 			c, has := wb.checks[name]

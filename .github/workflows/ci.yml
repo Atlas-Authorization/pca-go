@@ -36,3 +36,11 @@ jobs:
       - name: Unit tests + conformance corpus
         shell: bash
         run: go test -count=1 $([ "$RUNNER_OS" = Windows ] || echo -tags less) ./...
+      # the vendor attestation verifiers (AMD SEV-SNP, Intel TDX, Azure MAA, Google Confidential Space, NVIDIA GPU) and the strict
+      # X.509 readers replay conformance/attestation-evidence-vectors.json, and VerifyPassport replays the passport_hardware_vectors
+      # table of conformance/passport-vectors.json. Both are produced by the TypeScript reference (the pca repository's CI checks
+      # they are current); a missing file or table FAILS these tests, it is never skipped. Already part of the step above: run
+      # on their own so a regression in the verifiers is visible as its own step.
+      - name: Attestation verifiers (vendor vectors, strict DER, fail-closed tables)
+        shell: bash
+        run: go test -count=1 -run 'TestAttest|TestX509|TestPassportConformance|TestStrict|TestChainRoles|TestGcp|TestAzureMaa|TestVbios|TestNodeBase64' ./...

@@ -47,7 +47,7 @@ func mustIntentFail(t *testing.T, name, why string, v Verdict) {
 	if v.Allow || !has || got || len(v.Checks) != 10 || !strings.HasPrefix(v.Reason, "intent: ") || !strings.Contains(v.Reason, why) {
 		t.Fatalf("%s: want intent failure (%q), got %+v", name, why, v)
 	}
-	for _, c := range []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter"} {
+	for _, c := range []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter_format"} {
 		if !v.Checks[c] {
 			t.Fatalf("%s: check %s must pass", name, c)
 		}
@@ -279,12 +279,12 @@ func TestMutIntentVerdictShape(t *testing.T) {
 	} else if _, has := v.Checks["intent"]; has {
 		t.Fatal("intent must be absent")
 	}
-	// evaluated after counter: when counter AND intent fail, the first reason is counter's
+	// evaluated after counter_format: when counter_format AND intent fail, the first reason is counter_format's
 	g := signedWith(t, set("goal_salt", "wrong"))
 	g.p["counter"] = jnum(-1)
 	g.resign()
 	v := g.verifyIntent(nil)
-	if v.Allow || v.Checks["counter"] || v.Checks["intent"] || len(v.Checks) != 10 || !strings.HasPrefix(v.Reason, "counter: ") {
+	if v.Allow || v.Checks["counter_format"] || v.Checks["intent"] || len(v.Checks) != 10 || !strings.HasPrefix(v.Reason, "counter_format: ") {
 		t.Fatalf("counter before intent: %+v", v)
 	}
 	// ...and an intent failure alone is reported as the reason, with every earlier check passing

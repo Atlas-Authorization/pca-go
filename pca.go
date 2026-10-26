@@ -1020,7 +1020,7 @@ func WireFailure(why string) Verdict {
 }
 
 // VerifyPCActnCore runs the normative check order: wire, version, audience, validity, chain,
-// grant_ref_bound, plan_inclusion, leaf_signature, counter (then `intent` when the PCActn carries it). now is epoch milliseconds; audience is this verifier's own id.
+// grant_ref_bound, plan_inclusion, leaf_signature, counter_format (then `intent` when the PCActn carries it). now is epoch milliseconds; audience is this verifier's own id.
 func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, audience string) (v Verdict, err error) {
 	return VerifyPCActnCorePolicy(pcactn, grant, now, audience, nil)
 }
@@ -1041,7 +1041,7 @@ type VerifyOptions struct {
 	IntentV2 *IntentV2Context
 }
 
-// VerifyPCActnCoreWith is VerifyPCActnCore with explicit options. The `intent` check runs after `counter` and is
+// VerifyPCActnCoreWith is VerifyPCActnCore with explicit options. The `intent` check runs after `counter_format` and is
 // reported iff the PCActn carries `intent` or opts.Intent is active; otherwise the verdict is the pre-M2 one.
 func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64, audience string, opts VerifyOptions) (v Verdict, err error) {
 	allowedSuites := opts.AllowedSuites
@@ -1167,9 +1167,9 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 	}
 
 	if c, ok := safeInt(pcactn["counter"]); ok && c >= 0 {
-		pass("counter")
+		pass("counter_format")
 	} else {
-		fail("counter", "missing or not a non-negative safe integer")
+		fail("counter_format", "missing or not a non-negative safe integer")
 	}
 
 	// Intent Layer M2: `intent` (reported iff the PCActn carries `intent` or the policy is active). With a wire-valid
