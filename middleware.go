@@ -31,6 +31,7 @@ type ctxKey struct{}
 type contextValue struct {
 	verdict *Verdict
 	pcactn  map[string]any
+	authz   *AuthorizeResult
 }
 
 // RequirePCAOptions configures the RequirePCA middleware.
@@ -43,12 +44,49 @@ type contextValue struct {
 //   - IntentV2 optionally returns the Intent Layer v2 verifier state for this request (plaintext params, accepted
 //     schemas, session root and grants, accumulator state, layers, W-B artifacts and policy); nil = none. See
 //     IntentV2Context.
+//   - Authorize configures the default guard (0.5): every request goes through Authorize, which binds the proof to the
+//     executed operation and checks envelope predicates, root and delegated caveats, revocation and the replay counter,
+//     all required. nil = an empty option set: every request is refused with 403 authorize_config naming what is
+//     missing, never silently downgraded. See AuthorizeOptions.
+//   - SignatureOnly (0.5) is the explicit opt-in to verify the signature, chain and freshness only (the core verifier):
+//     no policy, no replay, no revocation, no operation binding. Giving it together with Authorize panics at construction.
 type RequirePCAOptions struct {
-	Audience     string
-	ResolveGrant func(grantRef string) (map[string]any, error)
-	Now          func() int64
-	Intent       *IntentPolicy
-	IntentV2     func(r *http.Request, pcactn map[string]any) *IntentV2Context
+	Audience      string
+	ResolveGrant  func(grantRef string) (map[string]any, error)
+	Now           func() int64
+	Intent        *IntentPolicy
+	IntentV2      func(r *http.Request, pcactn map[string]any) *IntentV2Context
+	Authorize     *AuthorizeOptions
+	SignatureOnly bool
+}
+
+// PlanFromContext is the AuthorizeOptions.Plan value that turns the single-step plan off: AuthorizeOptions.Context must
+// then return the principal-authorized plan (Plan with PlanAuthorized true).
+const PlanFromContext = "context"
+
+// AuthorizeOptions are the Authorize components RequirePCA adds on top of its Audience / ResolveGrant / Now / Intent /
+// IntentV2 when it runs in authorize mode.
+//
+//   - StateStore, IsRevoked: as in AuthorizeInput (both required: a missing one denies every request with 403).
+//   - Plan: "" (default) = PlanSingleStep; PlanFromContext = the plan must come from Context.
+//   - Context: the per-request AuthorizeContext (nil = none); an error denies.
+//   - Require: extra check names that must pass.
+//   - Operation maps the request to the operation the handler will execute (from your routing and the request body,
+//     never from the PCActn). body is the request body (at most MaxJSONChars bytes; the handler still reads it). No
+//     mapping, an error, a panic, a nil operation or a larger body denies (403) before the handler runs.
+type AuthorizeOptions struct {
+	StateStore StateStore
+	IsRevoked  func(pcactn, grant map[string]any) (bool, error)
+	Plan       string
+	Context    func(r *http.Request, pcactn map[string]any) (*AuthorizeContext, error)
+	Require    []string
+	Operation  func(r *http.Request, body []byte) (*Operation, error)
+	// EscalationPrincipals pins the Ed25519 keys whose EscalationAnswers count (header PCA-Escalation-Answer: strict
+	// base64url JSON, or the JSON body member escalation_answer); EscalationPinned pins principals that sign with a
+	// post-quantum / hybrid suite. Both empty: every escalate is refused (403, decision "escalate"). With any pinned,
+	// StateStore must implement LastStore: RequirePCA panics at construction otherwise.
+	EscalationPrincipals []string
+	EscalationPinned     []PinnedSigner
 }
 
 // FromContext returns the Verdict and the verified PCActn stashed by a passing RequirePCA
@@ -59,6 +97,16 @@ func FromContext(ctx context.Context) (*Verdict, map[string]any, bool) {
 		return nil, nil, false
 	}
 	return cv.verdict, cv.pcactn, true
+}
+
+// AuthorizationFromContext returns the AuthorizeResult stashed by a passing RequirePCA in authorize mode (its
+// Operation is the operation the request was authorized for), and whether one was present.
+func AuthorizationFromContext(ctx context.Context) (*AuthorizeResult, bool) {
+	cv, ok := ctx.Value(ctxKey{}).(*contextValue)
+	if !ok || cv == nil || cv.authz == nil {
+		return nil, false
+	}
+	return cv.authz, true
 }
 
 // ErrPCAHeader is returned by DecodePCAHeader for a value that is not strict unpadded base64url of UTF-8 text.
@@ -175,12 +223,26 @@ func writePCAErr(w http.ResponseWriter, status int, code, headerDesc, desc strin
 //     (a resolver error is treated as unknown: fail closed);
 //   - 403 when a well-formed PCActn resolves a grant but fails verification (the reason is in the JSON body only,
 //     never in the WWW-Authenticate header).
+//
+// The default is the full Authorize path (see RequirePCAOptions.Authorize); SignatureOnly opts into the core verifier alone.
+// It panics when both are given (a configuration error).
 func RequirePCA(opts RequirePCAOptions) func(http.Handler) http.Handler {
+	if opts.SignatureOnly && opts.Authorize != nil {
+		panic("pca: RequirePCA: SignatureOnly and Authorize are mutually exclusive")
+	}
+	if az := opts.Authorize; az != nil && az.StateStore != nil && len(az.EscalationPrincipals)+len(az.EscalationPinned) > 0 {
+		if _, ok := az.StateStore.(LastStore); !ok {
+			panic("pca: RequirePCA: Authorize.EscalationPrincipals needs a StateStore that implements LastStore (an escalation answer is bound to the holder's history head)")
+		}
+	}
 	now := opts.Now
 	if now == nil {
 		now = func() int64 { return time.Now().UnixMilli() }
 	}
 	return func(next http.Handler) http.Handler {
+		if !opts.SignatureOnly {
+			return authorizeHandler(opts, now, next)
+		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			pcactn, reason, ok := extractPCActn(r)
 			if !ok {
@@ -221,4 +283,128 @@ func RequirePCA(opts RequirePCAOptions) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// authorizeHandler is RequirePCA in authorize mode: the PCActn is extracted as in the default mode (401 when absent or
+// undecodable), the operation is mapped from the request, and Authorize decides before the handler runs.
+func authorizeHandler(opts RequirePCAOptions, now func() int64, next http.Handler) http.Handler {
+	az := opts.Authorize
+	if az == nil {
+		az = &AuthorizeOptions{}
+	}
+	plan := az.Plan
+	switch plan {
+	case "":
+		plan = PlanSingleStep
+	case PlanFromContext:
+		plan = ""
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body []byte
+		bodyOK := true
+		if r.Body != nil && r.Body != http.NoBody {
+			buf, err := io.ReadAll(io.LimitReader(r.Body, int64(MaxJSONChars)+1))
+			_ = r.Body.Close()
+			body, bodyOK = buf, err == nil && len(buf) <= MaxJSONChars
+		}
+		restore := func() {
+			if r.Body != nil && r.Body != http.NoBody {
+				r.Body = io.NopCloser(bytes.NewReader(body))
+			}
+		}
+		restore()
+		pcactn, reason, ok := extractPCActn(r)
+		if !ok {
+			writePCAError(w, http.StatusUnauthorized, "invalid_request", reason, nil)
+			return
+		}
+		var op *Operation
+		if az.Operation != nil && bodyOK {
+			restore()
+			op = mapOperation(az.Operation, r, body)
+		}
+		in := AuthorizeInput{Operation: op, Audience: opts.Audience, ResolveGrant: opts.ResolveGrant,
+			StateStore: az.StateStore, IsRevoked: az.IsRevoked, Now: now(), Plan: plan, Intent: opts.Intent,
+			Require: az.Require, EscalationPrincipals: az.EscalationPrincipals, EscalationPinned: az.EscalationPinned}
+		if len(in.escalationPins()) > 0 {
+			in.EscalationAnswer = extractEscalationAnswer(r, body, bodyOK)
+		}
+		if az.Context != nil {
+			in.Context = func(p map[string]any) (*AuthorizeContext, error) { return az.Context(r, p) }
+		}
+		if opts.IntentV2 != nil {
+			in.IntentV2 = func(p map[string]any) (*IntentV2Context, error) { return opts.IntentV2(r, p), nil }
+		}
+		res := Authorize(pcactn, in)
+		if !res.Allow {
+			code := "insufficient_authority"
+			if res.Status == http.StatusUnauthorized {
+				code = "invalid_pcactn"
+			}
+			writeAuthorizeError(w, res, code)
+			return
+		}
+		restore()
+		ctx := context.WithValue(r.Context(), ctxKey{}, &contextValue{verdict: res.Verdict, pcactn: res.PCActn, authz: &res})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func mapOperation(f func(*http.Request, []byte) (*Operation, error), r *http.Request, body []byte) (op *Operation) {
+	defer func() {
+		if recover() != nil {
+			op = nil
+		}
+	}()
+	op, err := f(r, body)
+	if err != nil {
+		return nil
+	}
+	return op
+}
+
+// writeAuthorizeError writes an authorize denial: the challenge carries only the error code (the reason is
+// request-derived, so it stays in the JSON body: error_description, reason, checks, missing).
+func writeAuthorizeError(w http.ResponseWriter, res AuthorizeResult, code string) {
+	w.Header().Set("WWW-Authenticate", fmt.Sprintf("PCA realm=%q, error=%q", "pca", code))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(res.Status)
+	body := map[string]any{"error": code, "error_description": res.Reason, "reason": res.Reason, "checks": res.Checks, "decision": res.Decision}
+	if res.Escalation != nil {
+		body["escalation"] = res.Escalation
+	}
+	if res.Missing != nil {
+		body["missing"] = res.Missing
+	}
+	// a lone surrogate of a truncated escalation reason is written as \udXXXX, as JSON.stringify does
+	var buf bytes.Buffer
+	_ = json.NewEncoder(&buf).Encode(body)
+	_, _ = w.Write(RestoreLoneSurrogates(buf.Bytes()))
+}
+
+// extractEscalationAnswer reads the principal's EscalationAnswer: header PCA-Escalation-Answer (strict unpadded base64url
+// of the JSON), else the body member escalation_answer. nil when absent or unreadable (an unreadable answer is no answer).
+func extractEscalationAnswer(r *http.Request, body []byte, bodyOK bool) any {
+	if h := r.Header.Get("PCA-Escalation-Answer"); h != "" {
+		raw, ok := DecodeB64uStrict(h, -1)
+		if !ok {
+			return nil
+		}
+		v, err := StrictParse(string(raw))
+		if err != nil {
+			return nil
+		}
+		return v
+	}
+	if !bodyOK || len(body) == 0 {
+		return nil
+	}
+	v, err := StrictParse(string(body))
+	if err != nil {
+		return nil
+	}
+	if m, ok := v.(map[string]any); ok {
+		return m["escalation_answer"]
+	}
+	return nil
 }

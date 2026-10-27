@@ -41,6 +41,13 @@ type Verdict struct {
 	Allow  bool
 	Checks map[string]bool
 	Reason string
+	// Reasons lists every reason in order: the first failure (Reason), then one for EACH further failing intent-v2 check
+	// (the escalate-class ones). DecisionOf reads the whole list, so a multi-check escalation stays an escalation.
+	// Empty when Allow, and on a wire failure (Reason only).
+	Reasons []string
+	// LegacyModelPolarity: rule 21's compatibility mode is in effect (model_polarity "legacy" and a grant reads a model-derived
+	// path in where). Authorize reports it as Degraded["tighten"].
+	LegacyModelPolarity bool
 }
 
 // ---- strict base64url ----------------------------------------------------------------
@@ -1020,7 +1027,7 @@ func WireFailure(why string) Verdict {
 }
 
 // VerifyPCActnCore runs the normative check order: wire, version, audience, validity, chain,
-// grant_ref_bound, plan_inclusion, leaf_signature, counter (then `intent` when the PCActn carries it). now is epoch milliseconds; audience is this verifier's own id.
+// grant_ref_bound, plan_inclusion, leaf_signature, counter_format (then `intent` when the PCActn carries it). now is epoch milliseconds; audience is this verifier's own id.
 func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, audience string) (v Verdict, err error) {
 	return VerifyPCActnCorePolicy(pcactn, grant, now, audience, nil)
 }
@@ -1041,7 +1048,7 @@ type VerifyOptions struct {
 	IntentV2 *IntentV2Context
 }
 
-// VerifyPCActnCoreWith is VerifyPCActnCore with explicit options. The `intent` check runs after `counter` and is
+// VerifyPCActnCoreWith is VerifyPCActnCore with explicit options. The `intent` check runs after `counter_format` and is
 // reported iff the PCActn carries `intent` or opts.Intent is active; otherwise the verdict is the pre-M2 one.
 func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64, audience string, opts VerifyOptions) (v Verdict, err error) {
 	allowedSuites := opts.AllowedSuites
@@ -1167,9 +1174,9 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 	}
 
 	if c, ok := safeInt(pcactn["counter"]); ok && c >= 0 {
-		pass("counter")
+		pass("counter_format")
 	} else {
-		fail("counter", "missing or not a non-negative safe integer")
+		fail("counter_format", "missing or not a non-negative safe integer")
 	}
 
 	// Intent Layer M2: `intent` (reported iff the PCActn carries `intent` or the policy is active). With a wire-valid
@@ -1183,7 +1190,11 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 	}
 	// Intent Layer v2: schema, intent_session, layers, accumulators, facts, provenance, classes (intent_v2.go), each
 	// reported only under its condition.
-	for _, c := range decideIntentV2(pcactn, grant, opts.IntentV2, float64(now)).checks {
+	var v2 []V2CheckResult
+	v2d := decideIntentV2(pcactn, grant, opts.IntentV2, float64(now))
+	v.LegacyModelPolarity = v2d.legacy
+	for _, c := range v2d.checks {
+		v2 = append(v2, V2CheckResult{Name: c.name, OK: c.ok, Reason: c.why, HasReason: !c.ok})
 		if c.ok {
 			pass(c.name)
 		} else {
@@ -1192,5 +1203,12 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 	}
 
 	v.Allow = !failed
+	if failed {
+		base := []string{}
+		if v.Reason != "" {
+			base = append(base, v.Reason)
+		}
+		v.Reasons = FoldV2Reasons(base, v2)
+	}
 	return v, nil
 }

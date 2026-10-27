@@ -114,7 +114,7 @@ func TestIntentCheckFailures(t *testing.T) {
 				f.resign()
 			}
 			v := f.verifyIntent(c.pol)
-			if v.Allow || v.Checks["intent"] || !v.Checks["counter"] || !v.Checks["leaf_signature"] {
+			if v.Allow || v.Checks["intent"] || !v.Checks["counter_format"] || !v.Checks["leaf_signature"] {
 				t.Fatalf("want intent fail only: %+v", v)
 			}
 			if !strings.HasPrefix(v.Reason, "intent: ") || !strings.Contains(v.Reason, c.reason) {

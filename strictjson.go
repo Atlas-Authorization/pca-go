@@ -292,6 +292,7 @@ func (p *jparser) value(depth int) (any, error) {
 		}
 		p.i++
 		o := map[string]any{}
+		var keys []string
 		p.ws()
 		if p.i < len(p.s) && p.s[p.i] == '}' {
 			p.i++
@@ -319,6 +320,7 @@ func (p *jparser) value(depth int) (any, error) {
 				return nil, err
 			}
 			o[k] = v
+			keys = append(keys, k)
 			p.ws()
 			if p.i < len(p.s) && p.s[p.i] == ',' {
 				p.i++
@@ -326,6 +328,7 @@ func (p *jparser) value(depth int) (any, error) {
 			}
 			if p.i < len(p.s) && p.s[p.i] == '}' {
 				p.i++
+				recordKeyOrder(o, keys)
 				return o, nil
 			}
 			return nil, p.err(`expected "," or "}"`)
