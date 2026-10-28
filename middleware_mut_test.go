@@ -196,6 +196,7 @@ func doReq(t *testing.T, opts RequirePCAOptions, p map[string]any) (*httptest.Re
 	req := httptest.NewRequest("POST", "/do", nil)
 	req.Header.Set(PCAHeader, headerFor(t, p))
 	rec := httptest.NewRecorder()
+	opts.SignatureOnly = opts.Authorize == nil // these cases pin the signature-only guard
 	RequirePCA(opts)(next).ServeHTTP(rec, req)
 	return rec, called
 }

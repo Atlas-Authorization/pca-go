@@ -60,6 +60,34 @@ func main() {
 `plan_inclusion`, `leaf_signature`, `counter`). Every check is **fail-closed** — the action is allowed
 only if none reports failure — and a `wire` failure is terminal (nothing else is evaluated).
 
+## Acting as an agent (producing proofs)
+
+The module also produces the proofs it verifies, so an agent written in Go needs no other runtime. The principal mints a root
+grant for the agent's public key; the agent signs one PCActn per action and sends it in the `PCA-Action` header (`Agent` keeps
+the replay counter, picks the nonce and builds the headers).
+
+```go
+principal, _ := pca.NewKeyPair() // the principal's key stays with the principal
+agentKey, _ := pca.NewKeyPair()
+
+minted, err := pca.MintGrant(principal, agentKey.Public, map[string]any{
+	"predicates": []any{map[string]any{"verb": "refund", "resource": "orders/*"}},
+	"caveats":    []any{map[string]any{"type": "max_spend", "usd": 50}},
+	"risk_policy": pca.DefaultRiskPolicy(),
+}, "refund order 1", "", "", nil)
+
+agent := pca.NewAgent(agentKey, minted.Grant, "https://api.example.com", 0)
+action, err := agent.Act("refund", "orders/1", map[string]any{"amount_cents": 500}, nil)
+for k, v := range action.Headers { req.Header.Set(k, v) }
+```
+
+`agent.Delegate(subKey, []any{pca.SealedCaveat()})` returns a sub-agent holding the chain plus one narrower hop (caveats are only
+ever appended). Third-party and approval artifacts: `SignDischarge`, `SignNarrow`, `SignEscalationAnswer`, `SignPassport`,
+`SignWorkflow` / `SignStepReceipt`, `SignReadGrant`, `SignFreshAt`. Ed25519 outputs are byte-exact against the shared producer
+vectors; ML-DSA and SLH-DSA suites sign through circl (`pca.GeneratePqKeyPair("ML-DSA-65")`, then `agent.Suite =
+&pca.SuiteOpts{Alg: "hybrid-ed25519-ml-dsa-65", Pq: pq}`). Persist the counter (`Agent.OnCounter`) if the process can restart: a lower
+counter is refused as a replay.
+
 ## Caveats (policy layer)
 
 The verifier above checks that the PCActn is well formed and authentic; like every PCA core verifier it does not decide
@@ -69,10 +97,21 @@ are enforced exactly like delegated ones) followed by the caveats the delegation
 `not_before`, `rate`, `max_blast_radius`, `reversibility_max`, `delegation_depth`, `budget_alloc` and `max_spend`; any other
 type is unsatisfied (fail closed). The `PCA-Action` header must be strict unpadded base64url of UTF-8 text (`pca.DecodePCAHeader(value)`).
 
+## What a passing result does not cover
+
+`counter: pass` is a format check (a non-negative integer); it does **not** mean the action was not replayed.
+Verification is stateless and this package has no replay store, so the resource server must persist, per grant and
+agent, the last accepted counter and refuse anything not strictly greater, atomically across all of its processes.
+
+The `RequirePCA` middleware runs the core verifier only. It does not check replay, revocation, caveats, envelope predicates, plan
+authorization, risk or thresholds, and it does not compare the request body with the signed `params_digest`. Do those
+checks in your handler (the caveat helpers above, the params digest of the body you will execute, your replay and
+revocation stores), or delegate the decision to a full verifier such as `requirePCA` from `@atlasauth/pca`.
+
 ## Conformance
 
 The repo ships a vendored copy of the shared **conformance corpus** (`conformance/vectors.json` +
-`conformance/keys.json`): over a hundred golden and adversarial PCActns with their expected verdicts,
+`conformance/keys.json`): 676 golden and adversarial PCActns with their expected verdicts,
 plus canonical-JSON, strict-base64url, and Merkle primitive vectors. `go test ./...` runs the verifier
 against every vector; it must reproduce `allow` and every listed check exactly.
 
