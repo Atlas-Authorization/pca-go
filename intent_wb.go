@@ -1534,14 +1534,16 @@ func intentWBContextError(is map[string]any, artifacts any, policy any) string {
 // ---- the W-B unit (intent-env.ts decideIntentWB) ----------------------------------------------------------------
 
 type wbResult struct {
-	skip    bool
-	checks  map[string]string // pass | question | fail
-	reason  string
-	outcome string
+	singleSource []string // worlds decided by a single oracle (rule 21: their env.world.<name> is model-derived)
+	skip         bool
+	checks       map[string]string // pass | question | fail
+	reason       string
+	outcome      string
+	env          map[string]any // the predicate env members the unit computed: world, prov, class (authorize)
 }
 
 func decideIntentWB(now float64, aud string, session string, action map[string]any, is map[string]any, artifacts any, policy any) wbResult {
-	out := wbResult{checks: map[string]string{}, outcome: "admit"}
+	out := wbResult{checks: map[string]string{}, outcome: "admit", env: map[string]any{}}
 	if ce := intentWBContextError(is, artifacts, policy); ce != "" {
 		out.checks["facts"] = "fail"
 		out.reason = "facts: the W-B context is malformed: " + ce
@@ -1571,6 +1573,8 @@ func decideIntentWB(now float64, aud string, session string, action map[string]a
 			return out
 		}
 		out.checks["facts"] = "pass"
+		out.env["world"] = w.world
+		out.singleSource = w.singleSource
 	}
 	prov, provP := is["prov"]
 	labels, labelsP := is["labels"]
@@ -1588,6 +1592,7 @@ func decideIntentWB(now float64, aud string, session string, action map[string]a
 			out.outcome = "deny"
 			return out
 		}
+		out.env["prov"] = p.env
 		if p.outcome == "question" {
 			out.checks["provenance"] = "question"
 			out.outcome = "question"
@@ -1611,6 +1616,7 @@ func decideIntentWB(now float64, aud string, session string, action map[string]a
 			return out
 		}
 		out.checks["classes"] = "pass"
+		out.env["class"] = c.classes
 	}
 	return out
 }

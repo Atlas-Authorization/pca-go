@@ -259,7 +259,7 @@ func TestMutCoreAllPass(t *testing.T) {
 	if !v.Allow || v.Reason != "" {
 		t.Fatalf("valid fixture: %+v", v)
 	}
-	for _, c := range []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter"} {
+	for _, c := range []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter_format"} {
 		if !v.Checks[c] {
 			t.Fatalf("check %s", c)
 		}
@@ -306,7 +306,7 @@ func TestMutCoreSingleFailures(t *testing.T) {
 		{"expired", func(f *fx) { f.now = 1_700_000_600_001 }, []string{"validity"}, "validity: the PCActn has expired"},
 		{"counter zero ok", func(f *fx) { f.p["counter"] = jnum(0) }, nil, ""},
 		{"counter one ok", func(f *fx) { f.p["counter"] = jnum(1) }, nil, ""},
-		{"counter negative", func(f *fx) { f.p["counter"] = jnum(-1) }, []string{"counter"}, "counter: missing or not a non-negative safe integer"},
+		{"counter negative", func(f *fx) { f.p["counter"] = jnum(-1) }, []string{"counter_format"}, "counter_format: missing or not a non-negative safe integer"},
 		{"grant_ref other", func(f *fx) { f.p["grant_ref"] = b64.EncodeToString(sha([]byte("zz"))) }, []string{"grant_ref_bound"}, "grant_ref_bound: grant_ref is not the id of the root capability in cap_chain"},
 		{"plan node", func(f *fx) { f.p["plan"].(map[string]any)["node_id"] = "n3" }, []string{"plan_inclusion"}, "plan_inclusion: action is not a node of the committed plan"},
 		{"plan cond differs", func(f *fx) {
@@ -333,7 +333,7 @@ func TestMutCoreSingleFailures(t *testing.T) {
 		for _, n := range c.failed {
 			fails[n] = true
 		}
-		for _, n := range []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter"} {
+		for _, n := range []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter_format"} {
 			if v.Checks[n] == fails[n] {
 				t.Fatalf("%s: check %s = %v", c.name, n, v.Checks[n])
 			}
@@ -348,7 +348,7 @@ func TestMutCoreFirstReasonWins(t *testing.T) {
 	f.p["counter"] = jnum(-5)
 	f.resign()
 	v := f.verify(nil)
-	if v.Allow || v.Reason != "audience: aud does not match this resource server / instance" || v.Checks["validity"] || v.Checks["counter"] {
+	if v.Allow || v.Reason != "audience: aud does not match this resource server / instance" || v.Checks["validity"] || v.Checks["counter_format"] {
 		t.Fatalf("%+v", v)
 	}
 }
