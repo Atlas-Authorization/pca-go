@@ -36,3 +36,146 @@ jobs:
       - name: Unit tests + conformance corpus
         shell: bash
         run: go test -count=1 $([ "$RUNNER_OS" = Windows ] || echo -tags less) ./...
+      # the vendor attestation verifiers (AMD SEV-SNP, Intel TDX, Azure MAA, Google Confidential Space, NVIDIA GPU) and the strict
+      # X.509 readers replay conformance/attestation-evidence-vectors.json, and VerifyPassport replays the passport_hardware_vectors
+      # table of conformance/passport-vectors.json. Both are produced by the TypeScript reference (the pca repository's CI checks
+      # they are current); a missing file or table FAILS these tests, it is never skipped. Already part of the step above: run
+      # on their own so a regression in the verifiers is visible as its own step.
+      # rules 20-21 and the ternary decision (escalate never allow; a model can only tighten): conformance/decision-vectors.json
+      - name: Decision vectors (units, tighten-only, decision lattice, multi-check fold, escalation answers under every suite, rules 20-21 end to end)
+        shell: bash
+        run: |
+          test -s conformance/decision-vectors.json
+          test -s conformance/model-rules-vectors.json
+          go test -count=1 -run 'TestDecision|TestEscalat|TestMultiCheck|TestStoreWithoutLast|TestSQLStateStore|TestAFailingCheck|TestHardFailure|TestValidAnswer|TestBadAnswers|TestAnswerNever|TestModelRules' ./...
+      # the agent / issuer side: conformance/producer-vectors.json (fixed keys, exact outputs; a missing file FAILS), round trips through the
+      # verifier, and the post-quantum suites (ML-DSA, SLH-DSA, hybrids) cross-verified. Already part of the step above.
+      - name: Agent / issuer side (producer vectors byte for byte, round trips, PQ hybrids)
+        shell: bash
+        run: |
+          test -s conformance/producer-vectors.json
+          go test -count=1 -run 'TestProducerVectors|TestAgent|TestEscalationAndPassportRoundTrip|TestProducerRefuses|TestPostQuantumSuites' ./...
+      # goal binding v3 (approved_goal): conformance/goal-commit-vectors.json (commit, invalid, binding); a missing file FAILS
+      - name: Goal binding v3 vectors
+        shell: bash
+        run: |
+          test -s conformance/goal-commit-vectors.json
+          go test -count=1 -run 'TestGoalCommitV3' ./...
+      # revocation staleness (T9): conformance/staleness-vectors.json (max_age, effective_reversibility, age, epoch, gate, membership, gate_ids)
+      - name: Revocation staleness vectors (age caps, signed epochs under pins, gate, Authorize freshness)
+        shell: bash
+        run: |
+          test -s conformance/staleness-vectors.json
+          go test -count=1 -run 'TestStaleness|TestAuthorizeRevocationStaleness' ./...
+      # operation records (T3) and plan lifecycle (T10): conformance/operation-vectors.json and plan-vectors.json (a missing file
+      # FAILS), the exactly-once / one-winner concurrency tests, the executor and the Authorize plan wiring
+      - name: Operation records and plan lifecycle (vectors, concurrency, executor, plan registry in Authorize)
+        shell: bash
+        run: |
+          test -s conformance/operation-vectors.json
+          test -s conformance/plan-vectors.json
+          go test -count=1 -run 'TestOperationVectors|TestExecuteAuthorized|TestKVOperationStore|TestExecutor|TestOperationRecordJSON|TestPlanVectors|TestPlanRegistry|TestPlanStatus|TestAuthorizeFeedsFromPlanRegistry' ./...
+      # the same exactly-once / one-winner guarantees over a real SQL database (separate module: the library imports no driver)
+      - name: SQL backends (replay store, atomic kv, operation store, plan registry)
+        shell: bash
+        working-directory: sqltest
+        run: go test -count=1 ./...
+      # assurance labels (T8, B7): conformance/assurance-vectors.json (signature_level, report, requirement, multi_root)
+      - name: Assurance labels (report, requirement gate, multi-root level, Authorize assurance check)
+        shell: bash
+        run: |
+          test -s conformance/assurance-vectors.json
+          go test -count=1 -run 'TestAssurance|TestAuthorizeAssuranceGate' ./...
+      # the reusable store conformance helper (claim-burst / claim-concurrent / durability / crash-after-claim / retry-after-timeout
+      # for a StateStore; create-once / transition-once / shared / durability for an OperationStore), with negative controls
+      - name: Store conformance helper (memory stores pass, non-atomic and forgetful stores are caught)
+        shell: bash
+        run: go test -count=1 -run 'TestStateStoreConformance|TestOperationStoreConformance' ./...
+      - name: Step-up client (principal device key, list / approve / deny against a local server)
+        shell: bash
+        run: go test -count=1 -run 'TestPrincipalDeviceKey|TestStepUp' ./...
+      # caveat language v2 (needs_discharge, sealed, narrow, max_uses, derive, spiffe_bound): conformance/caveat-lang-vectors.json,
+      # produced by the TypeScript reference; a missing file or primitive FAILS, it is never skipped
+      - name: Caveat language v2 vectors
+        shell: bash
+        run: |
+          test -s conformance/caveat-lang-vectors.json
+          go test -count=1 -run 'TestCaveatLang' ./...
+          (cd sqltest && go test -count=1 -run 'TestSQLStateStoreConsumeOnceTTL' ./...)
+      - name: Workflow admission in Authorize and RequirePCA (a missing fixtures file fails, never skips)
+        shell: bash
+        run: |
+          test -s conformance/authorize-workflow-fixtures.json
+          go test -count=1 -run 'TestK5AuthorizeWorkflowFixtures|TestK5RequirePCAWorkflow' ./...
+      - name: Provenance by default and undo windows (vectors, recorder, gate in Authorize and RequirePCA, undo admission hook)
+        shell: bash
+        run: |
+          test -s conformance/arg-provenance-vectors.json
+          test -s conformance/undo-vectors.json
+          go test -count=1 -run 'TestArgProvenance|TestUndo' ./...
+      - name: Forbid-wins certificate and linked policy template vectors (a missing file fails, never skips)
+        shell: bash
+        run: |
+          test -s conformance/forbid-certificate-vectors.json
+          test -s conformance/policy-link-vectors.json
+          go test -count=1 -run 'TestForbidCertificate|TestPolicyLink' ./...
+      - name: Attestation verifiers (vendor vectors, strict DER, fail-closed tables)
+        shell: bash
+        run: go test -count=1 -run 'TestAttest|TestX509|TestPassportConformance|TestStrict|TestChainRoles|TestGcp|TestAzureMaa|TestVbios|TestNodeBase64' ./...
+      # K3 artifacts (signed policy bundles, decision log, list receipts and cursors, grant management) and the `fresh_at` member:
+      # conformance/k3-vectors.json and conformance/fresh-at-vectors.json, produced by the TypeScript reference. A missing file fails.
+      - name: K3 vectors and the fresh_at member
+        shell: bash
+        run: |
+          test -s conformance/k3-vectors.json
+          test -s conformance/fresh-at-vectors.json
+          test -s conformance/pca-grant-vectors.json
+          test -s conformance/blueprint-vectors.json
+          test -s conformance/a2a-vectors.json
+          test -s conformance/k4-vectors.json
+          go test -count=1 -run 'K3|FreshAt|PcaGrant|Blueprint|A2A|K4' ./...
+          test -s conformance/workflow-vectors.json
+          test -s conformance/readside-vectors.json
+          test -s conformance/authorize-workflow-fixtures.json
+          test -s conformance/vault-aggregate-vectors.json
+          go test -count=1 -run 'K3|FreshAt|PcaGrant|Blueprint|A2A|K5' ./...
+          test -s conformance/lease-vectors.json
+          test -s conformance/obligations-vectors.json
+          test -s conformance/break-glass-vectors.json
+          test -s conformance/missing-context-vectors.json
+          test -s conformance/policy-classes-vectors.json
+          go test -count=1 -run 'K3|FreshAt|PcaGrant|Blueprint|A2A|Lease|Obligation|BreakGlass|MissingContext|PolicyClasses' ./...
+          test -s conformance/provenance-vectors.json
+          go test -count=1 -run 'K3|FreshAt|PcaGrant|Blueprint|A2A|Provenance' ./...
+      # offline Sigstore bundle verification: a separate module (sigstore-go) so core users do not pull its dependencies
+      - name: Sigstore bundle vectors
+        shell: bash
+        run: |
+          test -s conformance/sigstore-vectors.json || test -s ../../packages/pca/conformance/sigstore-vectors.json
+          (cd sigstore && go test -count=1 -run Sigstore .)
+      # the action-kit vectors (conformance/actions): parse, digest, trait expansion, rule 22 floor, pack proofs, schema v2 conform; a missing directory FAILS
+      - name: actions-vectors
+        shell: bash
+        run: |
+          test -d conformance/actions
+          go test -count=1 -run 'TestActions' ./...
+
+  # the runnable Gin server (examples/gin-server): a separate module that replaces the library with this checkout, so the
+  # main module's dependencies and gates are untouched. go.sum is resolved here (go mod tidy), not checked in.
+  example-gin:
+    name: example (gin server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: examples/gin-server/go.mod
+          cache: false
+      - name: Build and test the example (allow, then a refusal that carries `doc`)
+        working-directory: examples/gin-server
+        run: |
+          go mod tidy
+          go build ./...
+          go vet ./...
+          go test -count=1 ./...

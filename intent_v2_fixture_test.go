@@ -353,7 +353,7 @@ func (f *v2fx) claimReceipt(r map[string]any, post int64, keySets []any, receipt
 
 // ---- assertions -------------------------------------------------------------------------------------------------
 
-var coreChecks = []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter"}
+var coreChecks = []string{"wire", "version", "audience", "validity", "chain", "grant_ref_bound", "plan_inclusion", "leaf_signature", "counter_format"}
 
 // expectV2 asserts the exact v2 check set: every name in pass passes, every name in failNames fails, nothing else
 // is reported beyond the core checks and `intent`.

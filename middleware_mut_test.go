@@ -132,9 +132,9 @@ func TestMutWritePCAError(t *testing.T) {
 		keys    []string
 	}{
 		{"", nil, `PCA realm="pca", error="x_code"`, []string{"error"}},
-		{"why", nil, `PCA realm="pca", error="x_code", error_description="why"`, []string{"error", "error_description"}},
+		{"why", nil, `PCA realm="pca", error="x_code", error_description="why"`, []string{"doc", "error", "error_description"}},
 		{"", &Verdict{Checks: map[string]bool{"a": true}}, `PCA realm="pca", error="x_code"`, []string{"checks", "error"}},
-		{"d", &Verdict{Reason: "r", Checks: map[string]bool{"a": false}}, `PCA realm="pca", error="x_code", error_description="d"`, []string{"checks", "error", "error_description", "reason"}},
+		{"d", &Verdict{Reason: "r", Checks: map[string]bool{"a": false}}, `PCA realm="pca", error="x_code", error_description="d"`, []string{"checks", "doc", "error", "error_description", "reason"}},
 	}
 	// writePCAErrorReason: request-derived text (CR/LF included) stays out of the header, lands JSON-encoded in the body
 	{
@@ -196,6 +196,7 @@ func doReq(t *testing.T, opts RequirePCAOptions, p map[string]any) (*httptest.Re
 	req := httptest.NewRequest("POST", "/do", nil)
 	req.Header.Set(PCAHeader, headerFor(t, p))
 	rec := httptest.NewRecorder()
+	opts.SignatureOnly = opts.Authorize == nil // these cases pin the signature-only guard
 	RequirePCA(opts)(next).ServeHTTP(rec, req)
 	return rec, called
 }

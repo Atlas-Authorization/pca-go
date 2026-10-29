@@ -7,6 +7,7 @@ package pca
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -30,7 +31,163 @@ var (
 	schemaParamKeys   = []string{"type", "semantic", "sensitivity", "required", "values", "min", "max", "unit", "max_len", "items", "min_items",
 		"max_items", "default", "principal_neutral_default", "accumulates_into", "issued_by_site", "description"}
 	schemaSigKeys = []string{"alg", "kid", "value", "pq_value"}
+
+	// v2 (action kit): the same document plus normative verb members effects / traits / def / floors, document members
+	// traits_digest / trait_defs / pack, dotted parameter paths and the parameter members role / format / tags / provenance_min.
+	paramTypesV2      = []string{"string", "integer", "boolean", "date", "set", "array", "datetime", "duration", "object_ref"}
+	schemaDocKeysV2   = append(append([]string{}, schemaDocKeys...), "traits_digest", "trait_defs", "pack")
+	schemaVerbKeysV2  = append(append([]string{}, schemaVerbKeys...), "traits", "def", "floors", "confirmation")
+	schemaParamKeysV2 = append(append([]string{}, schemaParamKeys...), "role", "format", "tags", "provenance_min")
+	schemaV2Effects   = []string{"read", "create", "update", "delete", "send", "pay", "exec", "privilege", "export", "publish", "provision", "sign"}
+	reParamPathV2     = regexp.MustCompile(`^action\.params\.[A-Za-z0-9_]{1,64}(?:\.[A-Za-z0-9_]{1,64}){0,2}$`)
+	reDatetime        = regexp.MustCompile(`^([0-9]{4}-[0-9]{2}-[0-9]{2})T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])(?:\.[0-9]{1,3})?Z$`)
+	reIDValue         = regexp.MustCompile(`^[A-Za-z0-9._:\-]{1,128}$`)
 )
+
+// jsWS is the ECMAScript \s class (Go's \s is ASCII only).
+const jsWS = `\t\n\x{0B}\f\r \x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}`
+
+var formatRes = map[string]*regexp.Regexp{
+	"email":        regexp.MustCompile(`^[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9\-]{1,63}(?:\.[A-Za-z0-9\-]{1,63})+$`),
+	"url":          regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]{0,31}://[^` + jsWS + `/?#]+[^` + jsWS + `]*$`),
+	"uri_https":    regexp.MustCompile(`^https://[^` + jsWS + `/?#]+[^` + jsWS + `]*$`),
+	"uuid":         regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
+	"phone_e164":   regexp.MustCompile(`^\+[1-9][0-9]{6,14}$`),
+	"iso_country":  regexp.MustCompile(`^[A-Z]{2}$`),
+	"iso_currency": regexp.MustCompile(`^[A-Z]{3}$`),
+	"semver":       regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z\-]+(?:\.[0-9A-Za-z\-]+)*)?(?:\+[0-9A-Za-z\-]+(?:\.[0-9A-Za-z\-]+)*)?$`),
+	"sha256":       regexp.MustCompile(`^[0-9a-f]{64}$`),
+}
+
+var (
+	reIBAN  = regexp.MustCompile(`^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$`)
+	reCIDR4 = regexp.MustCompile(`^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/([0-9]{1,2})$`)
+	reCIDR6 = regexp.MustCompile(`^([0-9a-fA-F:]{2,39})/([0-9]{1,3})$`)
+)
+
+func ibanOK(s string) bool {
+	if !reIBAN.MatchString(s) {
+		return false
+	}
+	rem := 0
+	for _, ch := range s[4:] + s[:4] {
+		v := int(ch) - 48
+		if ch >= 'A' {
+			v = int(ch) - 55
+		}
+		if v > 9 {
+			rem = (rem*100 + v) % 97
+		} else {
+			rem = (rem*10 + v) % 97
+		}
+	}
+	return rem == 1
+}
+
+// canonDec: the decimal text n has no leading zeros (String(Number(n)) === n).
+func canonDec(n string) (int, bool) {
+	x := 0
+	for _, c := range n {
+		x = x*10 + int(c-'0')
+	}
+	return x, fmt.Sprint(x) == n
+}
+
+func cidrOK(s string) bool {
+	if m := reCIDR4.FindStringSubmatch(s); m != nil {
+		for _, o := range m[1:5] {
+			if x, ok := canonDec(o); !ok || x > 255 {
+				return false
+			}
+		}
+		x, ok := canonDec(m[5])
+		return ok && x <= 32
+	}
+	m := reCIDR6.FindStringSubmatch(s)
+	if m == nil {
+		return false
+	}
+	x, ok := canonDec(m[2])
+	return strings.Count(m[1], ":") >= 2 && !strings.Contains(m[1], ":::") && x <= 128 && ok
+}
+
+// formatCheck is the checker of a v2 format, or nil when the format is unknown. id:<type> accepts a 1..128 character safe id.
+func formatCheck(f string) func(string) bool {
+	switch f {
+	case "iban":
+		return ibanOK
+	case "cidr":
+		return cidrOK
+	case "email":
+		return func(s string) bool { return len(s) <= 254 && formatRes["email"].MatchString(s) }
+	}
+	if re, ok := formatRes[f]; ok {
+		return re.MatchString
+	}
+	if reIDFormat.MatchString(f) {
+		return reIDValue.MatchString
+	}
+	return nil
+}
+
+func formatViolation(d map[string]any, x string) (string, string) {
+	f, has := d["format"]
+	if !has {
+		return "", ""
+	}
+	fs, _ := f.(string)
+	if ck := formatCheck(fs); ck == nil || !ck(x) {
+		return "out_of_domain", "not a valid " + jsValueString(f)
+	}
+	return "", ""
+}
+
+// schemaFloorsError: "" if f is a well-formed materialized profile (shape only; the semantic check is rule 22).
+func schemaFloorsError(f any) string {
+	m, ok := f.(map[string]any)
+	if !ok {
+		return "floors must be an object"
+	}
+	for k := range m {
+		if !contains([]string{"risk", "rev", "blast_ppm", "esc", "caveats", "context", "prules"}, k) {
+			return "floors: unknown member '" + k + "'"
+		}
+	}
+	rng := func(x any, lo, hi float64) bool { return jsIsInt(x) && jsF(x) >= lo && jsF(x) <= hi }
+	if !rng(m["risk"], 0, 3) || !rng(m["esc"], 0, 3) {
+		return "floors.risk and floors.esc must be integers in 0..3"
+	}
+	if !strIn(m["rev"], schemaReversibles) {
+		return "floors.rev is not a reversibility class"
+	}
+	if !rng(m["blast_ppm"], 0, 1_000_000) {
+		return "floors.blast_ppm must be an integer in 0..1000000"
+	}
+	for _, c := range []struct {
+		name string
+		ok   func(string) bool
+	}{
+		{"caveats", func(s string) bool { return contains(caveatKinds, s) }},
+		{"context", isContextKey},
+		{"prules", func(s string) bool { return contains(paramRuleIDs, s) }},
+	} {
+		a, isL := m[c.name].([]any)
+		if !isL || len(a) > 64 {
+			return "floors." + c.name + " must be an array of known entries"
+		}
+		for _, x := range a {
+			if s, ok := x.(string); !ok || !c.ok(s) {
+				return "floors." + c.name + " must be an array of known entries"
+			}
+		}
+		for i := 1; i < len(a); i++ {
+			if !(a[i-1].(string) < a[i].(string)) {
+				return "floors." + c.name + " must be sorted and distinct"
+			}
+		}
+	}
+	return ""
+}
 
 // schemaStr is the reference isStr: a non-empty string without lone surrogates of at most max UTF-8 bytes.
 func schemaStr(v any, max int) bool {
@@ -67,20 +224,32 @@ func distinctStrings(a []any) bool {
 // paramDeclError is the reference paramDeclError: "" = well-formed, else the refusal text. Members are examined in sorted
 // order (Go maps carry no insertion order).
 func paramDeclError(path string, dv any, units map[string]any, hasUnits bool) string {
-	if !matchParamPath(path) {
+	return paramDeclErrorV(path, dv, units, hasUnits, false)
+}
+
+func paramDeclErrorV(path string, dv any, units map[string]any, hasUnits bool, v2 bool) string {
+	if v2 && !reParamPathV2.MatchString(path) || !v2 && !matchParamPath(path) {
 		return "parameter path '" + path + "' is not action.params.<name>"
 	}
-	if forbiddenSegments[strings.TrimPrefix(path, "action.params.")] {
+	reserved := false
+	for _, seg := range strings.Split(strings.TrimPrefix(path, "action.params."), ".") {
+		reserved = reserved || forbiddenSegments[seg]
+	}
+	if reserved {
 		return "parameter name '" + path + "' is reserved (__proto__ / constructor / prototype)"
 	}
 	d, ok := dv.(map[string]any)
 	if !ok {
 		return path + ": declaration must be an object"
 	}
-	if k, ok := firstUnknownKey(d, schemaParamKeys); !ok {
+	pk, pt := schemaParamKeys, paramTypes
+	if v2 {
+		pk, pt = schemaParamKeysV2, paramTypesV2
+	}
+	if k, ok := firstUnknownKey(d, pk); !ok {
 		return path + ": unknown member '" + k + "'"
 	}
-	if !strIn(d["type"], paramTypes) {
+	if !strIn(d["type"], pt) {
 		return path + ": unknown type"
 	}
 	if !schemaStr(d["semantic"], 128) {
@@ -118,7 +287,7 @@ func paramDeclError(path string, dv any, units map[string]any, hasUnits bool) st
 		return path + ": a set needs values"
 	}
 	for _, k := range []string{"min", "max"} {
-		if x, has := d[k]; has && (!jsIsInt(x) || (typ != "integer" && !(typ == "array" && d["items"] == "integer"))) {
+		if x, has := d[k]; has && (!jsIsInt(x) || (typ != "integer" && !(v2 && typ == "duration") && !(typ == "array" && d["items"] == "integer"))) {
 			return path + ": " + k + " must be a safe integer on an integer parameter"
 		}
 	}
@@ -184,6 +353,32 @@ func paramDeclError(path string, dv any, units map[string]any, hasUnits bool) st
 	if x, has := d["description"]; has && !schemaStr(x, 1024) {
 		return path + ": description must be a string"
 	}
+	if v2 {
+		if x, has := d["role"]; has && !schemaStr(x, 128) {
+			return path + ": role must be a non-empty string"
+		}
+		if f, has := d["format"]; has {
+			fs, isS := f.(string)
+			if !isS || formatCheck(fs) == nil || (typ != "string" && typ != "object_ref") {
+				return path + ": format must be a known format on a string parameter"
+			}
+		}
+		if tg, has := d["tags"]; has {
+			arr, ok := tg.([]any)
+			bad := !ok || len(arr) > len(paramTags)
+			for _, x := range arr {
+				if !strIn(x, paramTags) {
+					bad = true
+				}
+			}
+			if bad || !distinctStrings(arr) {
+				return path + ": tags must be distinct known tags"
+			}
+		}
+		if x, has := d["provenance_min"]; has && !strIn(x, provenanceLevels) {
+			return path + ": unknown provenance_min"
+		}
+	}
 	return ""
 }
 
@@ -192,11 +387,19 @@ func paramDeclOK(path string, dv any, units map[string]any, hasUnits bool) bool 
 }
 
 func verbDeclError(vv any, units map[string]any, hasUnits bool) string {
+	return verbDeclErrorV(vv, units, hasUnits, false)
+}
+
+func verbDeclErrorV(vv any, units map[string]any, hasUnits bool, v2 bool) string {
 	v, ok := vv.(map[string]any)
 	if !ok {
 		return "verb entry must be an object"
 	}
-	if k, ok := firstUnknownKey(v, schemaVerbKeys); !ok {
+	vk := schemaVerbKeys
+	if v2 {
+		vk = schemaVerbKeysV2
+	}
+	if k, ok := firstUnknownKey(v, vk); !ok {
 		return "verb entry: unknown member '" + k + "'"
 	}
 	if !schemaStr(v["verb"], 128) {
@@ -214,8 +417,17 @@ func verbDeclError(vv any, units map[string]any, hasUnits bool) string {
 		return fmt.Sprintf("%s: more than %d parameters", at, maxSchemaParams)
 	}
 	for _, p := range sortedKeysUtf8(params) {
-		if e := paramDeclError(p, params[p], units, hasUnits); e != "" {
+		if e := paramDeclErrorV(p, params[p], units, hasUnits, v2); e != "" {
 			return at + ": " + e
+		}
+	}
+	if v2 {
+		for _, p := range sortedKeysUtf8(params) {
+			for _, q := range sortedKeysUtf8(params) {
+				if q != p && strings.HasPrefix(q, p+".") {
+					return at + ": parameter '" + p + "' is both a value and the parent of '" + q + "'"
+				}
+			}
 		}
 	}
 	if x, has := v["reversibility"]; has && !strIn(x, schemaReversibles) {
@@ -259,10 +471,62 @@ func verbDeclError(vv any, units map[string]any, hasUnits bool) string {
 	if !single("openapi", "operationId", 128) {
 		return at + ": openapi must be {operationId}"
 	}
-	for _, k := range []string{"harm", "effects", "returns"} {
+	objKeys := []string{"harm", "effects", "returns"}
+	if v2 {
+		objKeys = []string{"harm", "returns"}
+	}
+	for _, k := range objKeys {
 		if x, has := v[k]; has {
 			if _, ok := x.(map[string]any); !ok {
 				return at + ": " + k + " must be an object"
+			}
+		}
+	}
+	if v2 {
+		ef, ok := v["effects"].([]any)
+		bad := !ok || len(ef) == 0 || len(ef) > len(schemaV2Effects)
+		allRead := true
+		for _, x := range ef {
+			if !strIn(x, schemaV2Effects) {
+				bad = true
+			}
+			allRead = allRead && x == "read"
+		}
+		if bad {
+			return fmt.Sprintf("%s: effects must be 1..%d known effects", at, len(schemaV2Effects))
+		}
+		for i := 1; i < len(ef); i++ {
+			if !(ef[i-1].(string) < ef[i].(string)) {
+				return at + ": effects must be sorted and distinct"
+			}
+		}
+		if (v["kind"] == "read") != allRead {
+			return at + ": kind read must hold exactly when every effect is read"
+		}
+		tr, ok := v["traits"].([]any)
+		bad = !ok || len(tr) > 64
+		for _, x := range tr {
+			if s, isS := x.(string); !isS || !reTraitID.MatchString(s) {
+				bad = true
+			}
+		}
+		if bad {
+			return at + ": traits must be trait ids"
+		}
+		for i := 1; i < len(tr); i++ {
+			if !(tr[i-1].(string) < tr[i].(string)) {
+				return at + ": traits must be sorted and distinct"
+			}
+		}
+		if !b64uOK(v["def"], b32) {
+			return at + ": def must be a canonical base64url SHA-256 digest"
+		}
+		if e := schemaFloorsError(v["floors"]); e != "" {
+			return at + ": " + e
+		}
+		if c, has := v["confirmation"]; has {
+			if e := confirmationShapeError(c); e != "" {
+				return at + ": " + e
 			}
 		}
 	}
@@ -273,6 +537,53 @@ func verbDeclError(vv any, units map[string]any, hasUnits bool) string {
 	}
 	if x, has := v["description"]; has && !schemaStr(x, 1024) {
 		return at + ": description must be a string"
+	}
+	return ""
+}
+
+// confirmationShapeError: "" iff c is a well-formed `confirmation` (shape only; the signature check is rule 22).
+func confirmationShapeError(cv any) string {
+	c, ok := cv.(map[string]any)
+	if !ok {
+		return "confirmation must be an object"
+	}
+	if k, ok := firstUnknownKey(c, []string{"def_digest", "traits_digest", "facts_digest", "final_traits", "dismissed", "reviewer_kid", "ts", "sig"}); !ok {
+		return "confirmation: unknown member '" + k + "'"
+	}
+	if !b64uOK(c["def_digest"], b32) || !b64uOK(c["traits_digest"], b32) || !b64uOK(c["facts_digest"], b32) {
+		return "confirmation: def_digest, traits_digest and facts_digest must be canonical base64url SHA-256 digests"
+	}
+	if !b64uOK(c["sig"], sigLen) {
+		return "confirmation: sig must be a canonical base64url 64-byte signature"
+	}
+	ft, ok := c["final_traits"].([]any)
+	if !ok || len(ft) > 64 {
+		return "confirmation: final_traits must be trait ids"
+	}
+	for i, x := range ft {
+		if s, ok := x.(string); !ok || !reTraitID.MatchString(s) {
+			return "confirmation: final_traits must be trait ids"
+		}
+		if i > 0 && !(ft[i-1].(string) < x.(string)) {
+			return "confirmation: final_traits must be sorted and distinct"
+		}
+	}
+	dm, ok := c["dismissed"].([]any)
+	if !ok || len(dm) > 64 {
+		return "confirmation: dismissed must be an array"
+	}
+	for _, x := range dm {
+		d, ok := x.(map[string]any)
+		t, _ := d["trait"].(string)
+		if !ok || !keysWithin(d, []string{"trait", "reason"}) || !reTraitID.MatchString(t) || !schemaStr(d["reason"], 256) {
+			return "confirmation: dismissed entries must be {trait, reason}"
+		}
+	}
+	if !schemaStr(c["reviewer_kid"], 128) {
+		return "confirmation: reviewer_kid must be a non-empty string"
+	}
+	if !jsIsSafeInteger(c["ts"]) || jsF(c["ts"]) < 0 {
+		return "confirmation: ts must be a non-negative safe integer"
 	}
 	return ""
 }
@@ -288,10 +599,15 @@ func actionSchemaShapeError(dv any, signed bool) string {
 	if !ok {
 		return "schema is not an object"
 	}
-	if k, ok := firstUnknownKey(doc, schemaDocKeys); !ok {
+	v2 := jsStrictEq(doc["v"], jsNumber(2))
+	dk := schemaDocKeys
+	if v2 {
+		dk = schemaDocKeysV2
+	}
+	if k, ok := firstUnknownKey(doc, dk); !ok {
 		return "unknown member '" + k + "'"
 	}
-	if !jsStrictEq(doc["v"], jsNumber(1)) {
+	if !jsStrictEq(doc["v"], jsNumber(1)) && !v2 {
 		return "unsupported schema version"
 	}
 	if doc["kind"] != actionSchemaKind {
@@ -331,13 +647,36 @@ func actionSchemaShapeError(dv any, signed bool) string {
 			return "state must be an array"
 		}
 	}
+	if v2 {
+		if td, has := doc["traits_digest"]; has && !b64uOK(td, b32) {
+			return "traits_digest must be a canonical base64url SHA-256 digest"
+		}
+		if td, has := doc["trait_defs"]; has {
+			arr, ok := td.([]any)
+			bad := !ok || len(arr) > 64
+			for _, x := range arr {
+				if _, isO := x.(map[string]any); !isO {
+					bad = true
+				}
+			}
+			if bad {
+				return "trait_defs must be an array of up to 64 objects"
+			}
+		}
+		if pv, has := doc["pack"]; has {
+			pk, ok := pv.(map[string]any)
+			if !ok || keysJoin(pk) != "ns,root,version" || !schemaStr(pk["ns"], 64) || !schemaStr(pk["version"], 128) || !b64uOK(pk["root"], b32) {
+				return "pack must be {ns, version, root}"
+			}
+		}
+	}
 	verbs, ok := doc["verbs"].([]any)
 	if !ok || len(verbs) == 0 || len(verbs) > maxSchemaVerbs {
 		return fmt.Sprintf("verbs must be 1..%d entries", maxSchemaVerbs)
 	}
 	seen := map[string]bool{}
 	for _, v := range verbs {
-		if e := verbDeclError(v, units, hasUnits); e != "" {
+		if e := verbDeclErrorV(v, units, hasUnits, v2); e != "" {
 			return e
 		}
 		name := v.(map[string]any)["verb"].(string)
@@ -533,6 +872,39 @@ func paramValueViolationReason(d map[string]any, x any) (string, string) {
 		}
 		if hasValues && !containsV(values, s) {
 			return "out_of_domain", "not one of the declared values"
+		}
+		return formatViolation(d, s)
+	case "object_ref":
+		s, ok := x.(string)
+		if !ok || hasLoneSurrogate(s) || len(s) == 0 {
+			return "bad_type", "expected a non-empty id string"
+		}
+		if float64(utf8Len(s)) > maxLen {
+			return "out_of_domain", "longer than " + jsLenientNumber(maxLen) + " UTF-8 bytes"
+		}
+		return formatViolation(d, s)
+	case "datetime":
+		s, ok := x.(string)
+		if !ok {
+			return "bad_type", "expected an RFC 3339 UTC string"
+		}
+		if m := reDatetime.FindStringSubmatch(s); m != nil && isCalendarDate(m[1]) {
+			return "", ""
+		}
+		return "out_of_domain", "not an RFC 3339 UTC datetime YYYY-MM-DDTHH:MM:SS[.fff]Z"
+	case "duration":
+		if !jsIsInt(x) {
+			return "bad_type", "expected a safe integer (milliseconds)"
+		}
+		f := jsF(x)
+		if f < 0 {
+			return "out_of_domain", "a duration is not negative"
+		}
+		if mn, has := d["min"]; has && f < jsF(mn) {
+			return "out_of_domain", "below min " + jsLenientNumber(jsF(mn))
+		}
+		if mx, has := d["max"]; has && f > jsF(mx) {
+			return "out_of_domain", "above max " + jsLenientNumber(jsF(mx))
 		}
 		return "", ""
 	case "integer":
