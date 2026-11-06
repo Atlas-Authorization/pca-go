@@ -1,7 +1,8 @@
 name: Mutation
 
 # Mutation testing of the verifier (every non-test .go file) with go-mutate (flagship tools/pca-audit/go-mutate), split
-# into shards on separate runners. The merge job checks the survivors against the equivalent-mutant ledger
+# into shards on separate runners: shards 1..60 slice the root package, shard 61 is the separate sigstore module (sigstore/,
+# its own go.mod; mutated whole, never carried, reported as sigstore/<file>). The merge job checks the survivors against the equivalent-mutant ledger
 # (native-check-equivalents.mjs): it passes when every survivor is a ledgered equivalent and no ledger entry is stale.
 # Runs on demand and on ci/** branches (the release-candidate check), never on main pushes.
 #
@@ -41,7 +42,10 @@ concurrency:
 
 env:
   CRATE: go-pca
-  SHARDS: '16'
+  # go-mutate selects, per mutant, only the tests that execute its position (coverage of each test alone); the cost left is
+  # the package rebuild per mutant (~100k lines + the LESS C), so 60 root shards keep each one well under the job limit (longest about 2.5 h)
+  SHARDS: '61'
+  ROOT_SHARDS: '60'
   # part of the baseline identity: a run with other mutator flags is no baseline
   MUT_CFG: 'go-mutate -tags less'
 
@@ -70,13 +74,14 @@ jobs:
           retention-days: 30
 
   shard:
-    name: shard ${{ matrix.shard }}/16
+    name: shard ${{ matrix.shard }}/61
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
       fail-fast: false
+      max-parallel: 10 # shared capacity: leaves slots for short CI and merge jobs
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -88,7 +93,7 @@ jobs:
       - name: Flagship tooling
         run: .github/scripts/mutation-layout.sh "$CRATE"
       - name: Baseline results (targeted mode)
-        if: ${{ !inputs.full }}
+        if: ${{ !inputs.full && matrix.shard != 61 }}
         env:
           GH_TOKEN: ${{ github.token }}
           BASELINE: ${{ inputs.baseline_run }}
@@ -102,14 +107,22 @@ jobs:
       - name: Mutate
         run: |
           (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate" .)
-          # a mutant that allocates without bound must die alone (killed), not exhaust the runner: 4 GiB address space per
-          # process, 3 mutants at a time
+          # a mutant that allocates without bound must die alone, not exhaust the runner: 4 GiB address space per process,
+          # 3 mutants at a time. Such a death is NOT a kill: go-mutate marks it run-error (no "--- FAIL:" line, or a runtime
+          # fatal error / signal death), and the merge requires a per-mutant reason in mutation-run-errors.json.
           ulimit -v 4194304
           # -tags less: the same build as ci.yml (cgo + the module's lessc/ copy). Without it less_cgo.go is never compiled
           # (all its mutants "survive" untested) and the LESS known answers (less_cgo_test.go) never run against pq.go.
+          if [ ${{ matrix.shard }} = 61 ]; then
+            # the sigstore module (its go.mod replaces pca-go with ../): whole module, no carry, not part of the baseline pool
+            "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE/sigstore" -shard 0/1 -j 3 -timeout 300s -out "$RUNNER_TEMP/raw.json" | tail -40
+            # not in the baseline pool (no carry for this module); the merge's plan guard counts its mutants
+            mkdir -p "$RUNNER_TEMP/sigstore-results"; cp "$RUNNER_TEMP/raw.json" "$RUNNER_TEMP/sigstore-results/results.json"
+            exit 0
+          fi
           carry=()
           [ -z "${BASE_POOL:-}" ] || carry=(-carry "$BASE_POOL")
-          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -shard "$(( ${{ matrix.shard }} - 1 ))/$SHARDS" -j 3 -timeout 300s \
+          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -shard "$(( ${{ matrix.shard }} - 1 ))/$ROOT_SHARDS" -j 3 -timeout 300s \
             "${carry[@]}" -out "$RUNNER_TEMP/raw.json" | tail -40
           # the next run's baseline: this slice's results (carried ones included)
           mkdir -p "$RUNNER_TEMP/mut-results"; cp "$RUNNER_TEMP/raw.json" "$RUNNER_TEMP/mut-results/results.json"
@@ -118,28 +131,60 @@ jobs:
           node -e '
             const fs = require("fs"); const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8")) || [];
             const counts = {}; for (const m of raw) counts[m.status] = (counts[m.status] || 0) + 1;
-            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
+            const dir = process.argv[2] === "61" ? "sigstore/" : "";
+            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: dir + m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
             if (raw.some((m) => !m.status)) { console.error("unfinished mutants in the shard"); process.exit(1); }
             fs.writeFileSync("counts.json", JSON.stringify(counts)); fs.writeFileSync("survivors.json", JSON.stringify(surv));
-          ' "$RUNNER_TEMP/raw.json"
+            // run errors (out of memory, stack overflow, signal death, no test failed): no test decided them; the merge fails
+            // on each one not in mutation-run-errors.json
+            const errs = raw.filter((m) => m.status === "run-error").map((m) => ({ file: dir + m.file, lineno: m.line, text: m.line_text.trim(), mutant: m.mutant, evidence: m.evidence }));
+            fs.writeFileSync("run-errors-" + process.argv[2] + ".json", JSON.stringify(errs, null, 1));
+            console.log(`timeouts: ${counts["killed-timeout"] || 0}, run errors: ${errs.length}`);
+          ' "$RUNNER_TEMP/raw.json" ${{ matrix.shard }}
           node .github/scripts/mutation-shard-report.mjs --crate="$CRATE" --shard=${{ matrix.shard }} --of="$SHARDS" --tool=go-mutate \
             --counts=counts.json --survivors=survivors.json --out=shard-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v4
         with:
           name: shard-${{ matrix.shard }}
-          path: shard-${{ matrix.shard }}.json
+          path: |
+            shard-${{ matrix.shard }}.json
+            run-errors-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v4
+        if: ${{ matrix.shard == 61 }}
+        with:
+          name: sigstore-results
+          path: ${{ runner.temp }}/sigstore-results/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: ${{ matrix.shard != 61 }}
         with:
           name: mut-results-${{ matrix.shard }}
           path: ${{ runner.temp }}/mut-results/
           retention-days: 30
 
+  # lessc/atlas_less.c (our C wrapper over the LESS reference) is C, which go-mutate never mutates: lessc-mutate.sh applies
+  # each hand-picked mutant of lessc-mutants.json to a copy of the module and runs the LESS known answers + the direct
+  # wrapper tests; every mutant must be killed or be a proven equivalent in lessc-mutants-ledger.json
+  lessc-mutants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Hand mutants of lessc/atlas_less.c
+        run: bash lessc-mutate.sh
+
   merge:
-    needs: shard
+    needs: [shard, lessc-mutants]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: The lessc hand-mutation gate passed
+        run: |
+          [ "${{ needs.lessc-mutants.result }}" = success ] || { echo "::error::lessc-mutants: ${{ needs.lessc-mutants.result }}"; exit 1; }
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -150,10 +195,74 @@ jobs:
         with:
           path: reports
           pattern: shard-*
+      - uses: actions/download-artifact@v4
+        with:
+          path: mut-results
+          pattern: mut-results-*
+      - uses: actions/download-artifact@v4
+        with:
+          name: sigstore-results
+          path: sigstore-results
+      # a shipped source file outside the plan is never green: go-mutate takes the module root (shards 1..60) and sigstore/ (shard 61).
+      # Any other source file in any directory, a build constraint that hides a file from `-tags less`, or a planned file with no mutant
+      # in the results fails, unless mutation-excluded.json names its path with a reason the coordinator agreed.
+      - name: Every shipped source file is in the mutation plan
+        run: |
+          node - <<'EOF'
+          const fs = require("fs"), path = require("path");
+          const excl = JSON.parse(fs.readFileSync("mutation-excluded.json", "utf8"));
+          for (const e of excl) if (!e.path || !e.reason) { console.error("::error::exclusion without dir or reason: " + JSON.stringify(e)); process.exit(1); }
+          const mutated = new Set();
+          const walkR = (d, pre) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walkR(p, pre); else if (e.name === "results.json") for (const m of JSON.parse(fs.readFileSync(p, "utf8"))) mutated.add(pre + m.file); } };
+          walkR("mut-results", "");
+          walkR("sigstore-results", "sigstore/");
+          let bad = 0, n = 0;
+          const fail = (m) => { console.error("::error::" + m); bad++; };
+          const walk = (d) => { for (const e of fs.readdirSync(d || ".", { withFileTypes: true })) {
+            const p = d ? d + "/" + e.name : e.name;
+            if (e.isDirectory()) { if (e.name !== ".git" && e.name !== ".github" && e.name !== "mut-results" && e.name !== "sigstore-results" && e.name !== "reports" && !excl.some((x) => x.path === p)) walk(p); continue; }
+            if (!/\.(go|c|h|s|S|cc|cpp)$/.test(e.name) || e.name.endsWith("_test.go") || excl.some((x) => x.path === p)) continue;
+            n++;
+            if (!e.name.endsWith(".go")) { fail("source file outside the mutation plan: " + p); continue; }
+            if (d !== "" && d !== "sigstore") { fail("source file outside the mutation plan: " + p); continue; }
+            const b = fs.readFileSync(p, "utf8").match(/^\/\/go:build (.*)$/m);
+            if (b && !/^less( && cgo)?$/.test(b[1].trim())) fail("build constraint hides it from the mutation run: " + p + " (" + b[1] + ")");
+            if (!mutated.has(p)) fail("no mutant from this file in the results: " + p);
+          } };
+          walk("");
+          console.log(`${n} shipped source file(s) checked, ${excl.length} excluded path(s), ${bad} problem(s)`);
+          process.exit(bad ? 1 : 0);
+          EOF
       - name: Merge shards and check the ledger
         run: >
           node .github/scripts/mutation-merge.mjs --crate="$CRATE" --shards="$SHARDS" --reports=reports
           --checker="$MONO/tools/pca-audit" --src="$GITHUB_WORKSPACE"
+      # gate honesty: a run-error mutant ended without any test deciding it (out of memory under ulimit -v, stack overflow,
+      # signal death). Each must be in mutation-run-errors.json with a per-mutant reason; an unlisted one or a stale entry fails.
+      - name: Run errors are each proven mutant-caused
+        if: ${{ !cancelled() }}
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const got = []; let shards = 0;
+            const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/^run-errors-\d+\.json$/.test(e.name)) { shards++; got.push(...JSON.parse(fs.readFileSync(p, "utf8"))); } } };
+            walk("reports");
+            const want = Number(process.env.SHARDS);
+            if (shards !== want) { console.error(`::error::run-error lists from ${shards}/${want} shards (a missing list is a failure)`); process.exit(1); }
+            const led = JSON.parse(fs.readFileSync(process.env.MONO + "/sdks/go-pca/mutation-run-errors.json", "utf8"));
+            const key = (m) => [m.file, m.text, m.mutant].join(" | ");
+            const have = new Map(); for (const m of got) have.set(key(m), (have.get(key(m)) || 0) + 1);
+            let bad = 0; const used = new Set();
+            for (const e of led) {
+              if (!e.reason) { console.error("::error::run-error ledger entry without a reason: " + key(e)); bad++; }
+              const n = have.get(key(e)) || 0, k = e.multiplicity || 1;
+              if (n !== k) { console.error(`::error::run-error ledger entry covers ${k}, the run has ${n}: ${key(e)}`); bad++; }
+              used.add(key(e));
+            }
+            for (const m of got) if (!used.has(key(m))) { console.error(`::error::UNPROVEN run error, no test decided it: ${key(m)} (line ${m.lineno}; ${m.evidence})`); bad++; }
+            console.log(`${got.length} run-error mutant(s) over ${shards} shards, ${led.length} ledger entries, ${bad} problem(s)`);
+            process.exit(bad ? 1 : 0);
+          '
       - uses: actions/upload-artifact@v4
         if: always()
         with:
