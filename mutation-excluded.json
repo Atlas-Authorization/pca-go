@@ -1,0 +1,14 @@
+[
+ {
+  "path": "examples",
+  "reason": "sample applications, each its own module; not part of the published SDK"
+ },
+ {
+  "path": "lessc",
+  "reason": "vendored C, not mutation-tested here: the patched LESS reference plus its small verify-only wrapper, atlas_less.c; go-mutate only mutates Go. Tested by the LESS known-answer vectors and by a check that this copy matches the canonical one. atlas_less.c is hand-mutated by the lessc-mutants job (lessc-mutate.sh, lessc-mutants.json)"
+ },
+ {
+  "path": "less_cgo.c",
+  "reason": "unity-build file: only #include and #undef lines for lessc, no logic of its own"
+ }
+]

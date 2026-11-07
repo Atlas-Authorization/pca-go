@@ -16,6 +16,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -53,6 +55,31 @@ func parseJSNumberLexeme(s string) (float64, bool) {
 		return 0, false
 	}
 	return f, true
+}
+
+var (
+	jsRadixRe   = regexp.MustCompile(`^0(?:[xX][0-9a-fA-F]+|[oO][0-7]+|[bB][01]+)$`)
+	jsDecimalRe = regexp.MustCompile(`^[+-]?(?:Infinity|(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$`)
+)
+
+// jsStringToNumber is Number(s) for a string (ECMAScript StringToNumber), NaN where JS gives NaN. The grammars gate
+// strconv.ParseFloat, which also takes "inf", "nan", "1_000" and "0x1p4", and big.Int, which also takes a sign.
+func jsStringToNumber(s string) float64 {
+	t := jsTrim(s)
+	if t == "" {
+		return 0
+	}
+	if jsRadixRe.MatchString(t) {
+		base := map[byte]int{'x': 16, 'o': 8, 'b': 2}[t[1]|0x20]
+		n, _ := new(big.Int).SetString(t[2:], base)
+		f, _ := new(big.Float).SetInt(n).Float64() // nearest, ties to even; too large is +Inf
+		return f
+	}
+	if !jsDecimalRe.MatchString(t) {
+		return math.NaN()
+	}
+	f, _ := strconv.ParseFloat(t, 64) // the grammar leaves only ErrRange, where f is +-Inf as in JS
+	return f
 }
 
 // jsIsSafeInteger is Number.isSafeInteger (-0 IS a safe integer).
