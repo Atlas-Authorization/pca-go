@@ -248,8 +248,8 @@ func checkSessionRevocation(ev any, session any, authority any, ids any, now any
 				return "the epoch drops '" + id + "', revoked in the last accepted epoch (not append-only)"
 			}
 		}
-		if jsF(ep["epoch"]) == jsF(le["epoch"]) && ep["root"] != le["root"] {
-			return "two different revocation sets under one epoch number (equivocation)"
+		if r := revEquivocation(ep, le); r != "" {
+			return r
 		}
 	}
 	set := map[string]bool{}
@@ -277,4 +277,13 @@ func IntentRevocationPrimitive(input any) bool {
 	ev := withoutKeys(in, "session", "authority", "ids", "now", "max_age_ms", "last")
 	last, lastP := in["last"]
 	return checkSessionRevocation(ev, in["session"], in["authority"], in["ids"], in["now"], in["max_age_ms"], last, lastP, nil) == ""
+}
+
+// revEquivocation: the tracked last epoch and this one share a number but not a root. Both lists are checked against their
+// signed root before this runs, so it is a second line of defence; a function of its own so a test can reach it.
+func revEquivocation(ep, le map[string]any) string {
+	if jsF(ep["epoch"]) == jsF(le["epoch"]) && ep["root"] != le["root"] {
+		return "two different revocation sets under one epoch number (equivocation)"
+	}
+	return ""
 }

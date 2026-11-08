@@ -447,6 +447,9 @@ func mapOpens(kind string, e map[string]any, size int, commit string) bool {
 	return root != nil && mapCommitOf(size, root) == commit
 }
 
+// mapOpensFn is a variable only so a test can inject a fault and reach decideMapDisclosure's recover.
+var mapOpensFn = mapOpens
+
 type mapDecision struct {
 	ok     bool
 	cell   []int
@@ -494,7 +497,7 @@ func decideMapDisclosure(mapCommit any, action map[string]any, params any, param
 		kind string
 		e    map[string]any
 	}{{"header", he}, {"cell", ce}, {"metrics", me}} {
-		if !mapOpens(o.kind, o.e, size, commit) {
+		if !mapOpensFn(o.kind, o.e, size, commit) {
 			return bad("the " + o.kind + " leaf does not open the map commitment")
 		}
 	}
