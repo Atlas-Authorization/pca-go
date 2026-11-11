@@ -132,9 +132,9 @@ func TestMutWritePCAError(t *testing.T) {
 		keys    []string
 	}{
 		{"", nil, `PCA realm="pca", error="x_code"`, []string{"error"}},
-		{"why", nil, `PCA realm="pca", error="x_code", error_description="why"`, []string{"error", "error_description"}},
+		{"why", nil, `PCA realm="pca", error="x_code", error_description="why"`, []string{"doc", "error", "error_description"}},
 		{"", &Verdict{Checks: map[string]bool{"a": true}}, `PCA realm="pca", error="x_code"`, []string{"checks", "error"}},
-		{"d", &Verdict{Reason: "r", Checks: map[string]bool{"a": false}}, `PCA realm="pca", error="x_code", error_description="d"`, []string{"checks", "error", "error_description", "reason"}},
+		{"d", &Verdict{Reason: "r", Checks: map[string]bool{"a": false}}, `PCA realm="pca", error="x_code", error_description="d"`, []string{"checks", "doc", "error", "error_description", "reason"}},
 	}
 	// writePCAErrorReason: request-derived text (CR/LF included) stays out of the header, lands JSON-encoded in the body
 	{
@@ -196,6 +196,7 @@ func doReq(t *testing.T, opts RequirePCAOptions, p map[string]any) (*httptest.Re
 	req := httptest.NewRequest("POST", "/do", nil)
 	req.Header.Set(PCAHeader, headerFor(t, p))
 	rec := httptest.NewRecorder()
+	opts.SignatureOnly = opts.Authorize == nil // these cases pin the signature-only guard
 	RequirePCA(opts)(next).ServeHTTP(rec, req)
 	return rec, called
 }
@@ -214,7 +215,7 @@ func TestMutRequirePCAErrors(t *testing.T) {
 	resolve := func(string) (map[string]any, error) { return grant, nil }
 
 	// default clock: the vector is long expired relative to real time -> 403 validity, and no nil-func panic.
-	rec, called := doReq(t, RequirePCAOptions{Audience: aud, ResolveGrant: resolve}, p)
+	rec, called := doReq(t, RequirePCAOptions{InsecureSkipPlanRootCheck: true, Audience: aud, ResolveGrant: resolve}, p)
 	b := errBody(t, rec)
 	if rec.Code != 403 || called || b["error"] != "insufficient_authority" {
 		t.Fatalf("default clock: %d %v", rec.Code, b)
@@ -238,7 +239,7 @@ func TestMutRequirePCAErrors(t *testing.T) {
 			q["grant_ref"] = gr
 		}
 		resolved := false
-		rec, called = doReq(t, RequirePCAOptions{Audience: aud, Now: func() int64 { return now },
+		rec, called = doReq(t, RequirePCAOptions{InsecureSkipPlanRootCheck: true, Audience: aud, Now: func() int64 { return now },
 			ResolveGrant: func(string) (map[string]any, error) { resolved = true; return grant, nil }}, q)
 		b = errBody(t, rec)
 		if rec.Code != 401 || called || resolved || b["error"] != "invalid_request" || b["error_description"] != "PCActn has no grant_ref" {
@@ -247,7 +248,7 @@ func TestMutRequirePCAErrors(t *testing.T) {
 	}
 
 	// nil resolver
-	rec, called = doReq(t, RequirePCAOptions{Audience: aud, Now: func() int64 { return now }}, p)
+	rec, called = doReq(t, RequirePCAOptions{InsecureSkipPlanRootCheck: true, Audience: aud, Now: func() int64 { return now }}, p)
 	b = errBody(t, rec)
 	if rec.Code != 401 || called || b["error"] != "invalid_request" || b["error_description"] != "no grant resolver configured" {
 		t.Fatalf("nil resolver: %d %v", rec.Code, b)
@@ -259,7 +260,7 @@ func TestMutRequirePCAErrors(t *testing.T) {
 		func(string) (map[string]any, error) { return grant, errors.New("x") },
 		func(string) (map[string]any, error) { return nil, errors.New("x") },
 	} {
-		rec, called = doReq(t, RequirePCAOptions{Audience: aud, Now: func() int64 { return now }, ResolveGrant: rf}, p)
+		rec, called = doReq(t, RequirePCAOptions{InsecureSkipPlanRootCheck: true, Audience: aud, Now: func() int64 { return now }, ResolveGrant: rf}, p)
 		b = errBody(t, rec)
 		if rec.Code != 401 || called || b["error"] != "unknown_grant" || b["error_description"] != "grant_ref does not resolve to a known grant" {
 			t.Fatalf("resolver %d: %d %v", i, rec.Code, b)
@@ -267,7 +268,7 @@ func TestMutRequirePCAErrors(t *testing.T) {
 	}
 
 	// failing verdict: error code, reason and checks are surfaced
-	rec, called = doReq(t, RequirePCAOptions{Audience: "other", Now: func() int64 { return now }, ResolveGrant: resolve}, p)
+	rec, called = doReq(t, RequirePCAOptions{InsecureSkipPlanRootCheck: true, Audience: "other", Now: func() int64 { return now }, ResolveGrant: resolve}, p)
 	b = errBody(t, rec)
 	if rec.Code != 403 || called || b["error"] != "insufficient_authority" || b["error_description"] != b["reason"] ||
 		!strings.HasPrefix(fmt.Sprint(b["reason"]), "audience: ") {

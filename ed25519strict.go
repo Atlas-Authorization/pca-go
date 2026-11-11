@@ -3,6 +3,7 @@ package pca
 import (
 	"crypto/ed25519"
 	"math/big"
+	"sync"
 )
 
 // Strict RFC 8032 verification. Go's crypto/ed25519 does not reject small-order public keys (a forged
@@ -106,8 +107,38 @@ func edMul(p *edPoint, k *big.Int) *edPoint {
 	return r
 }
 
+// edPointMemo remembers edStrictPoint verdicts (a pure function of the 32 bytes; the big-integer [L]P costs ~1 ms and the
+// same keys / commitments recur across verifications). Bounded: emptied when full.
+var edPointMemo = struct {
+	sync.Mutex
+	m map[[32]byte]bool
+}{m: map[[32]byte]bool{}}
+
+const edPointMemoMax = 1 << 14
+
 // edStrictPoint: canonical, on-curve, NOT small-order, NOT mixed-order (torsion-free and non-identity).
 func edStrictPoint(enc []byte) bool {
+	if len(enc) != 32 {
+		return false
+	}
+	key := [32]byte(enc)
+	edPointMemo.Lock()
+	ok, hit := edPointMemo.m[key]
+	edPointMemo.Unlock()
+	if hit {
+		return ok
+	}
+	ok = edStrictPointUncached(enc)
+	edPointMemo.Lock()
+	if len(edPointMemo.m) >= edPointMemoMax {
+		clear(edPointMemo.m)
+	}
+	edPointMemo.m[key] = ok
+	edPointMemo.Unlock()
+	return ok
+}
+
+func edStrictPointUncached(enc []byte) bool {
 	p, ok := edDecode(enc)
 	if !ok || edIsIdentity(p) {
 		return false
@@ -123,8 +154,10 @@ func VerifyStrict(pub, msg, sig []byte) bool {
 	if leInt(sig[32:]).Cmp(edL) >= 0 { // non-canonical S
 		return false
 	}
-	if !edStrictPoint(pub) || !edStrictPoint(sig[:32]) {
+	// the cheap equation first: a forged signature (the common hostile input) costs one library verify, and the two subgroup
+	// scalar multiplications run only for a signature that already verifies. The verdict is the same: every gate must pass.
+	if !ed25519.Verify(ed25519.PublicKey(pub), msg, sig) {
 		return false
 	}
-	return ed25519.Verify(ed25519.PublicKey(pub), msg, sig)
+	return edStrictPoint(pub) && edStrictPoint(sig[:32])
 }

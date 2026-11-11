@@ -143,9 +143,9 @@ func TestMutValidateSignerSetEveryRefusal(t *testing.T) {
 
 func TestMutSignerSetHashRefusalsAndOrder(t *testing.T) {
 	for name, set := range map[string][]any{
-		"non-object":  {5},
-		"role-number": {map[string]any{"role": 5, "publicKey": "k"}},
-		"pk-number":   {map[string]any{"role": "agent", "publicKey": 5}},
+		"non-object":          {5},
+		"role-number":         {map[string]any{"role": 5, "publicKey": "k"}},
+		"pk-number":           {map[string]any{"role": "agent", "publicKey": 5}},
 		"lone-surrogate-role": {map[string]any{"role": "\xed\xa0\x80", "publicKey": "k"}},
 	} {
 		if h, ok := SignerSetHash(set); ok || h != nil {

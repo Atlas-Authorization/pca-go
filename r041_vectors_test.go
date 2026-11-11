@@ -34,7 +34,7 @@ func TestR041ShareVectors(t *testing.T) {
 		ran++
 		t.Run(name, func(t *testing.T) {
 			ctx := v["context"].(map[string]any)
-			got, err := VerifyPCActnCorePolicy(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), nil)
+			got, err := verifyCorePolicySkipPlan(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
