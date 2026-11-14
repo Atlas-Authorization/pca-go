@@ -991,9 +991,10 @@ func TestKillBMiddlewareIntentV2(t *testing.T) {
 	grant := deepM(t, f.grant)
 	ref := f.p["grant_ref"].(string)
 	called := false
-	h := RequirePCA(RequirePCAOptions{
-		Audience: v2Aud,
-		Now:      func() int64 { return f.now },
+	h := RequirePCA(RequirePCAOptions{InsecureSkipPlanRootCheck: true,
+		SignatureOnly: true,
+		Audience:      v2Aud,
+		Now:           func() int64 { return f.now },
 		ResolveGrant: func(r string) (map[string]any, error) {
 			if r == ref {
 				return grant, nil

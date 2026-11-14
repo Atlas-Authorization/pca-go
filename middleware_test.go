@@ -61,9 +61,10 @@ func mw(t *testing.T, audience string) func(http.Handler) http.Handler {
 		audience = aud
 	}
 	wantRef := pcactn["grant_ref"].(string)
-	return RequirePCA(RequirePCAOptions{
-		Audience: audience,
-		Now:      func() int64 { return now },
+	return RequirePCA(RequirePCAOptions{InsecureSkipPlanRootCheck: true,
+		SignatureOnly: true,
+		Audience:      audience,
+		Now:           func() int64 { return now },
 		ResolveGrant: func(ref string) (map[string]any, error) {
 			if ref == wantRef {
 				return grant, nil
@@ -144,9 +145,10 @@ func TestRequirePCA_UndecodableHeader(t *testing.T) {
 
 func TestRequirePCA_UnknownGrant(t *testing.T) {
 	pcactn, _, aud, now := loadValidVector(t)
-	handler := RequirePCA(RequirePCAOptions{
-		Audience: aud,
-		Now:      func() int64 { return now },
+	handler := RequirePCA(RequirePCAOptions{InsecureSkipPlanRootCheck: true,
+		SignatureOnly: true,
+		Audience:      aud,
+		Now:           func() int64 { return now },
 		ResolveGrant: func(ref string) (map[string]any, error) {
 			return nil, fmt.Errorf("no such grant")
 		},

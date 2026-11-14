@@ -742,11 +742,13 @@ func isSafeRegexSource(src []uint16) bool {
 // evaluateConditionTri call when no document scope is open).
 type regexBudget struct {
 	evaluations, chars, steps int
+	refusals                  int // evaluations refused (uncompilable or over budget): "could not decide", never "no match"
 }
 
 func (b *regexBudget) charge(src []uint16, subjectLen int) bool {
 	prog := compileSafeRegex(src)
 	if prog == nil {
+		b.refusals++
 		return false
 	}
 	ev := b.evaluations + 1
@@ -754,6 +756,7 @@ func (b *regexBudget) charge(src []uint16, subjectLen int) bool {
 	steps := b.steps + len(prog)*(subjectLen+1)
 	if ev > maxRegexEvaluationsPerDoc || chars > maxRegexSourceCharsPerDoc || steps > maxRegexStepsPerDoc {
 		b.evaluations = maxRegexEvaluationsPerDoc + 1
+		b.refusals++
 		return false
 	}
 	b.evaluations, b.chars, b.steps = ev, chars, steps

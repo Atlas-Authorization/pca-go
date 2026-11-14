@@ -1,0 +1,1344 @@
+[
+ {
+  "file": "actions_traits.go",
+  "text": "if !isL || len(a) > 64 {",
+  "mutant": "binary > -> <=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a list of 64 or fewer is now refused; pca.money_moving's caveats has 3, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "arg_provenance.go",
+  "text": "r.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: ProvenanceRecorder.segment (line 911, deferred Unlock on the next line); ProvenanceRecorder.Receipts (line 971, deferred Unlock on the next line); ProvenanceRecorder.ForAction (line 950, deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock.",
+  "multiplicity": 3
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if p.Rev == \"\" {",
+  "mutant": "binary == -> !=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: rows that set no Rev keep '' (rows that set one become reversible); the first is pca.data_export, whose rev '' fails 'profile.rev is not a reversibility class', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "ed25519strict.go",
+  "text": "edPointMemo.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: edStrictPoint, the memo read (line 125); edStrictPoint, the memo write (line 132). Each critical section has no branch that leaves before the Unlock: the map read, or the capacity check and map write on the non-nil memo, then Unlock. It is reached by every 32-byte key on that path.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if p.Rev == \"\" {",
+  "mutant": "if-cond -> false",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: Rev stays '' for rows that set none; the first is pca.data_export, whose raw rev '' fails 'profile.rev is not a reversibility class', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !leqProfile(profileFromRaw(ud[\"floor\"]), profileFromRaw(t[\"floor\"])) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication) is reported as 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "operations.go",
+  "text": "s.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: MemoryOperationStore.Get (line 109, deferred Unlock on the next line); MemoryOperationStore.Transition (line 119, deferred Unlock on the next line); MemoryOperationStore.ListOpen (line 131, deferred Unlock on the next line); MemoryOperationStore.Create (line 98, deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock.",
+  "multiplicity": 4
+ },
+ {
+  "file": "actions.go",
+  "text": "return true",
+  "mutant": "return true -> false",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: subsetS is always false, so pca.impersonation, the only row with implies (external_communication) fails 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"esc\"], 0, 3) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the esc check refuses in-range values; pca.money_moving has esc 2, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "{\"privilege_change\", nil, Profile{Risk: 3, Esc: 3, Caveats: []string{\"resource_scope\", \"short_expiry\"}}, \"changes who can do what\"},",
+  "mutant": "int 3 -> +1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.privilege_change gets risk 4 (col 42) or esc 4 (col 50), outside 0..3, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "breakglass.go",
+  "text": "r.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: BreakGlassRegistry.Review (line 197, deferred Unlock on the next line); BreakGlassRegistry.Accept (line 130, deferred Unlock on the next line); BreakGlassRegistry.Frozen (line 227, deferred Unlock on the next line); BreakGlassRegistry.Use (line 159, deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock.",
+  "multiplicity": 4
+ },
+ {
+  "file": "tool_schema.go",
+  "text": "i++",
+  "mutant": "++ -> --",
+  "reason": "unitsString on a surrogate pair: i-- and the loop's i++ return to the same unit, so sb grows for ever. A string with no pair never takes this branch and is unchanged."
+ },
+ {
+  "file": "actions.go",
+  "text": "bad, found := \"\", false",
+  "mutant": "assign false -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: unknownMember reports a member from the start, so pca.money_moving's floor gets \"profile: unknown member ''\", so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if e := registryErrorRaw(raws, true); e != \"\" {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry during package var init panics unconditionally at actions_traits.go:395, whatever registryErrorRaw returned for the shipped table."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "return p.Risk <= q.Risk && okp && okq && rp <= rq && p.Blast <= q.Blast && p.Esc <= q.Esc &&",
+  "mutant": "binary <= -> <",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): both floors have risk 2 and 2 < 2 is false, so leqProfile fails 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics. buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): both floors have rev rank 2 and 2 < 2 is false (at col 46) so leqProfile fails; at col 63 likewise both blast_ppm are 0 and 0 < 0 is false, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 3
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !isL || len(im) > 8 || !allS || !distinctStrings(im) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: each of the three negations (col 6 array, col 29 all strings, col 38 distinct) refuses a good list; pca.money_moving's empty implies is an array, all strings, distinct, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 3
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if e := registryErrorRaw(raws, true); e != \"\" {",
+  "mutant": "binary != -> ==",
+  "reason": "The shipped table validates, so registryErrorRaw returns '' and the flipped test takes the panic at actions_traits.go:395 during package var init."
+ },
+ {
+  "file": "predicates.go",
+  "text": "i++",
+  "mutant": "++ -> --",
+  "reason": "parseGlob on a backslash with a following unit: i-- and the loop's i++ return to the same backslash, so out grows for ever. A trailing backslash returns earlier and a glob with no backslash is unchanged."
+ },
+ {
+  "file": "protect.go",
+  "text": "p.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: Protected.isRevoked (line 51, deferred Unlock on the next line); Protected.Revoke (line 45). Unlock is the statement after the map write. A Protected from Protect always has the map; on a zero-value Protected the write panics the same way with or without the Lock.",
+  "multiplicity": 2
+ },
+ {
+  "file": "action_schema.go",
+  "text": "return true",
+  "mutant": "return true -> false",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: distinctStrings is always false, so pca.money_moving's empty implies gets 'implies must be up to 8 distinct trait ids', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !leqProfile(profileFromRaw(ud[\"floor\"]), profileFromRaw(t[\"floor\"])) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): its floor is the join with the implied floor, so leq holds and the flipped test reports 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "blueprint.go",
+  "text": "r.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: BlueprintRegistry.Accept (line 111, deferred Unlock on the next line); BlueprintRegistry.lookup (line 143, deferred Unlock on the next line); BlueprintRegistry.Epoch (line 151, deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock.",
+  "multiplicity": 3
+ },
+ {
+  "file": "actions.go",
+  "text": "if !contains(allowed, k) && (!found || k < bad) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every member of pca.money_moving's floor is reported as unknown, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.money_moving's floor is an object, which now returns 'profile must be an object', so registryErrorRaw returns an error and actions_traits.go:395 panics. buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.money_moving is an object and now returns 'trait must be an object', so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions.go",
+  "text": "if !contains(allowed, k) && (!found || k < bad) {",
+  "mutant": "binary && -> ||",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: (!found || ...) is true for the first key, so with || pca.money_moving's first floor member is reported as unknown, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "return p.Risk <= q.Risk && okp && okq && rp <= rq && p.Blast <= q.Blast && p.Esc <= q.Esc &&",
+  "mutant": "binary <= -> >",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): both floors have risk 2 and 2 > 2 is false, so leqProfile fails 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics. buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): both floors have rev rank 2 and 2 > 2 is false (at col 46) so leqProfile fails; at col 63 both blast_ppm are 0 and 0 > 0 is false; at col 83 implied esc 0 > own esc 1 is false, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 4
+ },
+ {
+  "file": "jsval.go",
+  "text": "return float64(t), true",
+  "mutant": "return true -> false",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: jsNum refuses Go ints and raw() holds ints, so jsIsInt fails and pca.money_moving gets 'profile.risk must be an integer in 0..3', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions.go",
+  "text": "if !contains(allowed, k) && (!found || k < bad) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a known member is now reported as unknown; pca.money_moving's floor holds only known members, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !isL || len(im) > 8 || !allS || !distinctStrings(im) {",
+  "mutant": "binary > -> <=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: 8 or fewer implies is now refused; pca.money_moving has 0, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "authorize.go",
+  "text": "s.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: MemoryStateStore.ConsumeOnce, Claim, Pin, RaisePin and Last (each has the deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock.",
+  "multiplicity": 5
+ },
+ {
+  "file": "intent_acc.go",
+  "text": "for i := 1; i <= w; i++ {",
+  "mutant": "++ -> --",
+  "reason": "responds_within with within >= 1: i counts down from 1 and i <= w stays true, so out grows for ever. within <= 0 skips the loop and is unchanged."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if s, ok := x.(string); !ok || !c.ok(s) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a known entry is now refused; pca.money_moving's caveat amount_cap is known, so registryErrorRaw returns an error and actions_traits.go:395 panics. buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: any string entry is now refused; pca.money_moving's first caveat is one, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if visiting[id] {",
+  "mutant": "if-cond -> false",
+  "reason": "walk never stops on a revisited id. An acyclic registry never revisits an unfinished id (the depth memo answers first), so it behaves as before; only an implies cycle differs, and walk then recurses for ever."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "{\"money_moving\", nil, Profile{Risk: 3, Rev: \"rate_limited\", Blast: 700_000, Esc: 2, Caveats: []string{\"amount_cap\", \"count_cap\", \"window\"}, Context: []string{\"idempotency\"}, Prules: []string{\"money_has_currency\", \"money_amount_bounded\", \"pay_has_idempotency\"}}, \"moves money\"},",
+  "mutant": "int 3 -> +1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.money_moving gets risk 4, outside 0..3, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if visiting[id] {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the first walk returns -1 at once, so pca.money_moving gets 'implies cycle', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions.go",
+  "text": "func isContextKey(k string) bool { return contains(contextKeys, k) || reTaint.MatchString(k) }",
+  "mutant": "binary || -> &&",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a context key must now be both listed and match reTaint; pca.money_moving's context idempotency does not match, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"esc\"], 0, 3) {",
+  "mutant": "int 0 -> 1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the esc floor becomes 1; pca.external_communication has esc 0, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if strings.HasPrefix(id, \"pca.\") && !core {",
+  "mutant": "binary && -> ||",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every shipped id starts with pca. and the test becomes prefix-or-not-core, so pca.money_moving gets 'the pca. namespace is reserved', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "in := func(x any, lo, hi float64) bool { return jsIsInt(x) && jsF(x) >= lo && jsF(x) <= hi } // strict profile: never -0",
+  "mutant": "binary >= -> >",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: 0 is no longer in range at the low bound; pca.destructive has blast_ppm 0 and fails 'profile.blast_ppm must be an integer in 0..1000000', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "saferegex.go",
+  "text": "p.i += 2",
+  "mutant": "+= -> -=",
+  "reason": "After \\xHH the position returns to the backslash itself (start+4-4), and the position is the parser's only state, so cat or the class loop re-reads the same escape and appends for ever, whatever surrounds it. A source without \\xHH is unchanged."
+ },
+ {
+  "file": "actions.go",
+  "text": "if !ok {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: strsOf fails on every array, so pca.money_moving's implies gets 'implies must be up to 8 distinct trait ids', so registryErrorRaw returns an error and actions_traits.go:395 panics. buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: strsOf fails on an array holding a string; pca.impersonation, the only row with implies (external_communication) gets 'implies must be up to 8 distinct trait ids', so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "in := func(x any, lo, hi float64) bool { return jsIsInt(x) && jsF(x) >= lo && jsF(x) <= hi } // strict profile: never -0",
+  "mutant": "binary <= -> >",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: risk 3 > 3 is false, so pca.money_moving fails 'profile.risk must be an integer in 0..3', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if e := profileErrorRaw(t[\"floor\"]); e != \"\" {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every floor error branch is taken, with an empty message; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "{\"legal_binding\", nil, Profile{Risk: 3, Rev: \"irreversible\", Esc: 3}, \"legally or cryptographically binds you\"},",
+  "mutant": "int 3 -> +1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.legal_binding gets risk 4 (col 39) or esc 4 (col 68), outside 0..3, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "intent_artifacts.go",
+  "text": "if x == s {",
+  "mutant": "binary == -> !=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: contains is true only if some element differs, so contains on a one-element list of s is false: pca.impersonation, the only row with implies (external_communication) has prules [recipient_param_declared] on both sides, subsetS fails and leqProfile fails 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "in := func(x any, lo, hi float64) bool { return jsIsInt(x) && jsF(x) >= lo && jsF(x) <= hi } // strict profile: never -0",
+  "mutant": "binary >= -> <",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: risk 3 < 0 is false, so pca.money_moving fails 'profile.risk must be an integer in 0..3', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions.go",
+  "text": "ppmMax               = 1_000_000",
+  "mutant": "int 1_000_000 -> -1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: ppmMax becomes 999999; pca.unreviewed has blast_ppm 1000000, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "in := func(x any, lo, hi float64) bool { return jsIsInt(x) && jsF(x) >= lo && jsF(x) <= hi } // strict profile: never -0",
+  "mutant": "binary <= -> <",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: risk 3 < 3 is false, so pca.money_moving fails 'profile.risk must be an integer in 0..3', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if len(defs) > maxRegistryTraits {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the size check always refuses, for the 22 shipped rows, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "visiting[id] = true",
+  "mutant": "assign true -> false",
+  "reason": "visiting is never set, so the cycle test never fires. An acyclic registry never needs it; only an implies cycle differs, and walk then recurses for ever."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "if len(hs) == 1 {",
+  "mutant": "if-cond -> false",
+  "reason": "mapTreeRoot has no base case: at one leaf k=1 and mapTreeRoot(hs[:1]) calls itself for ever. Every non-empty tree reaches one leaf; on an empty slice both versions panic at hs[:1]."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"risk\"], 0, 3) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the risk check always refuses; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "for i := 1; i < len(a); i++ {",
+  "mutant": "int 1 -> 0",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the sort check reads a[-1] on pca.money_moving's caveats, a runtime panic during package init."
+ },
+ {
+  "file": "intent_artifacts.go",
+  "text": "return true",
+  "mutant": "return true -> false",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: contains is always false, so unknownMember reports every member of pca.money_moving's floor as unknown, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "if len(hs) == 1 {",
+  "mutant": "int 1 -> 0",
+  "reason": "The base case is now length 0, never reached by recursion: at one leaf mapTreeRoot(hs[:1]) calls itself for ever. Every non-empty tree reaches one leaf; on an empty slice both versions panic (hs[0] against hs[:1])."
+ },
+ {
+  "file": "stepup.go",
+  "text": "s.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: MemorySecretStore.Load (line 41, deferred Unlock on the next line); MemorySecretStore.Save (line 48, deferred Unlock on the next line); MemorySecretStore.Delete (line 56, deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock.",
+  "multiplicity": 3
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if strings.HasPrefix(id, \"pca.\") && !core {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the test becomes prefix-and-core, true for every shipped row, so pca.money_moving gets 'the pca. namespace is reserved', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "{\"code_execution\", nil, Profile{Risk: 3, Rev: \"irreversible\", Esc: 2, Caveats: []string{\"resource_scope\"}, Context: []string{\"sandbox_attested\"}}, \"runs code or commands\"},",
+  "mutant": "int 3 -> +1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.code_execution gets risk 4, outside 0..3, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "{\"unreviewed\", nil, Profile{Risk: 3, Rev: \"irreversible\", Blast: 1_000_000, Esc: 2, Caveats: []string{\"approval_ref\", \"resource_scope\"}, Context: []string{\"dry_run_first\"}}, \"has not been reviewed yet\"},",
+  "mutant": "int 3 -> +1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.unreviewed gets risk 4, outside 0..3, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "for i := 1; i < len(a); i++ {",
+  "mutant": "binary < -> >=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the loop body now runs only when i >= len(a): pca.money_moving's one-entry context reads a[1], index out of range, a runtime panic during package init."
+ },
+ {
+  "file": "jsval.go",
+  "text": "for i := 0; i < len(s); {",
+  "mutant": "binary < -> >=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the loop never runs on a non-empty string, so jsLen('moves money') is 0 and pca.money_moving gets 'card_phrase must be a non-empty string', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if len(defs) > maxRegistryTraits {",
+  "mutant": "binary > -> <=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: 22 <= 512 now refuses the shipped table as too large, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if e := profileErrorRaw(t[\"floor\"]); e != \"\" {",
+  "mutant": "binary != -> ==",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a valid floor (empty error) is now the error branch; pca.money_moving has one, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if du < 0 {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): any walk of an implied trait now returns -1, giving 'implies cycle', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !strIn(p[\"rev\"], defReversibility) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the rev check always refuses; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "if s[i] == 0xED && i+2 < len(s) && s[i+1] >= 0xA0 && s[i+1] <= 0xBF {",
+  "mutant": "binary && -> ||",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: ASCII next-bytes satisfy the test, so it steps by 3 and at i=9 of 'moves money' reads s[11], index out of range, a runtime panic during package init. buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: with the || the test reads s[i+1] unguarded: at the last byte of 'moves money' it reads s[11], index out of range, a runtime panic during package init.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !(a[i-1].(string) < a[i].(string)) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a sorted pair is now refused; pca.money_moving's caveats are sorted, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok || !reTraitID.MatchString(id) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every id is 'malformed'; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "return ok && f == math.Trunc(f) && math.Abs(f) <= maxSafeInt && !(f == 0 && math.Signbit(f))",
+  "mutant": "binary <= -> >",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: jsIsInt refuses safe magnitudes, so pca.money_moving risk 3 fails 'profile.risk must be an integer in 0..3', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"risk\"], 0, 3) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the risk check refuses in-range risks; pca.money_moving has risk 3, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "for i := 1; i < len(a); i++ {",
+  "mutant": "binary < -> <=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the loop reaches i == len(a): pca.money_moving's caveats reads a[3], index out of range, a runtime panic during package init."
+ },
+ {
+  "file": "jsval.go",
+  "text": "for i := 0; i < len(s); {",
+  "mutant": "binary < -> <=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the loop reaches i == len(s): jsLen('moves money') reads s[11], index out of range, a runtime panic during package init."
+ },
+ {
+  "file": "readvault.go",
+  "text": "func (v *memVault) Put(t string, e VaultEntry) { v.mu.Lock(); v.m[t] = e; v.mu.Unlock() }",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: memVault.Put (line 60). Unlock is the last statement of the one-liner, and NewMemoryVault, the only constructor of this unexported type, always sets the map."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "for i := 1; i < len(a); i++ {",
+  "mutant": "++ -> --",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: i goes 1 then 0: pca.money_moving's caveats reads a[-1], a runtime panic during package init."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: profileErrorRaw (line 47) with !ok forced true reports 'profile must be an object' for pca.money_moving's floor, and registryErrorRaw (line 141) with !ok forced true reports 'trait must be an object' for pca.money_moving; each of the two occurrences panics at init so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if du < 0 {",
+  "mutant": "binary < -> >=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): walk of its target is 1, and 1 >= 0 now returns -1, giving 'implies cycle', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "k := 1",
+  "mutant": "int 1 -> 2",
+  "reason": "k starts at 2. One leaf is unaffected and every larger n splits as before until a two-leaf subtree, where k=2 makes mapTreeRoot(hs[:2]) call itself for ever. k stays below n elsewhere, so no input reaches a slice panic or another answer."
+ },
+ {
+  "file": "jsval.go",
+  "text": "if s[i] == 0xED && i+2 < len(s) && s[i+1] >= 0xA0 && s[i+1] <= 0xBF {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every position takes the surrogate branch: at i=9 of 'moves money' it reads s[11], index out of range, a runtime panic during package init."
+ },
+ {
+  "file": "readvault.go",
+  "text": "v.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: memVault.Get (line 62, deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock."
+ },
+ {
+  "file": "actions.go",
+  "text": "sort.Strings(out)",
+  "mutant": "remove call statement",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: sortUniqS keeps input order; pca.money_moving's prules are written money_has_currency before money_amount_bounded, so they fail 'must be sorted and distinct', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !(a[i-1].(string) < a[i].(string)) {",
+  "mutant": "binary - -> +",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the check compares a[2] window with a[1] count_cap in pca.money_moving's caveats, which is out of order, so it returns 'must be sorted and distinct', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok || !reTraitID.MatchString(id) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a string id now counts as malformed (at col 6 the !ok; at col 13 the !MatchString, where a matching id does); pca.money_moving has a string, well-formed id, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok || jsLen(cp) == 0 || jsLen(cp) > 120 {",
+  "mutant": "binary == -> !=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a non-empty card_phrase is now refused; pca.money_moving has 'moves money', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"blast_ppm\"], 0, ppmMax) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the blast_ppm check refuses in-range values; pca.money_moving has 700000, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !(a[i-1].(string) < a[i].(string)) {",
+  "mutant": "int 1 -> 0",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: each element is compared with itself, never strictly less; pca.money_moving's caveats fails 'must be sorted and distinct', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if d < 0 {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every depth now reads as 'implies cycle'; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "strictjson.go",
+  "text": "p.i += 6",
+  "mutant": "+= -> -=",
+  "reason": "After a valid surrogate pair escape p.i goes 6 back from the first escape's last hex digit, and the line 176 increment lands exactly on its backslash: the same pair is decoded and written again for ever, so sb grows. Only the parser's position decides this, so it holds for every such pair; any other string is unchanged."
+ },
+ {
+  "file": "actions.go",
+  "text": "return out, true",
+  "mutant": "return true -> false",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: strsOf always reports failure, so pca.money_moving's implies gets 'implies must be up to 8 distinct trait ids', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !(a[i-1].(string) < a[i].(string)) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every pair is refused; pca.money_moving's caveats has one, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"risk\"], 0, 3) {",
+  "mutant": "int 3 -> -1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the risk ceiling becomes 2; pca.money_moving has risk 3, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "for k*2 < len(hs) {",
+  "mutant": "binary < -> <=",
+  "reason": "One leaf is unaffected. At two leaves 2 <= 2 raises k to 2 and mapTreeRoot(hs[:2]) calls itself for ever, and every n >= 2 reaches a subtree where k == n (a power of two) or a two-leaf subtree. The final k never exceeds n, so no input reaches a slice panic or another answer."
+ },
+ {
+  "file": "jsval.go",
+  "text": "return ok && f == math.Trunc(f) && math.Abs(f) <= maxSafeInt && !(f == 0 && math.Signbit(f))",
+  "mutant": "binary == -> !=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: jsIsInt refuses integers, so pca.money_moving risk 3 fails 'profile.risk must be an integer in 0..3', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"esc\"], 0, 3) {",
+  "mutant": "int 3 -> -1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the esc ceiling becomes 2; pca.privilege_change has esc 3, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if ud == nil {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): the known target now reads as 'implies unknown trait', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if d > maxTraitImpliesDepth {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every trait now 'exceeds' the depth limit; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "if !ok {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: jsF gives NaN for a number, so the range test on pca.money_moving risk 3 is false, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !strIn(p[\"rev\"], defReversibility) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the rev check refuses known classes; pca.money_moving has rate_limited, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "return ok && f == math.Trunc(f) && math.Abs(f) <= maxSafeInt && !(f == 0 && math.Signbit(f))",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the -0 test is inverted, so non-zero risk 3 of pca.money_moving fails 'profile.risk must be an integer in 0..3', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if by[id] != nil {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every id is 'defined twice'; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if ud == nil {",
+  "mutant": "binary == -> !=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies (external_communication): its target exists, so the flipped test reports 'implies unknown trait', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"blast_ppm\"], 0, ppmMax) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the blast_ppm check always refuses; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !(a[i-1].(string) < a[i].(string)) {",
+  "mutant": "binary < -> >=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a strictly ascending pair now reads as out of order; pca.money_moving's caveats fails 'must be sorted and distinct', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok || jsLen(cp) == 0 || jsLen(cp) > 120 {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a string card_phrase is now refused; pca.money_moving has 'moves money', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "return ok && f == math.Trunc(f) && math.Abs(f) <= maxSafeInt && !(f == 0 && math.Signbit(f))",
+  "mutant": "binary && -> ||",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: jsIsInt refuses every 0; pca.destructive has blast_ppm 0, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"blast_ppm\"], 0, ppmMax) {",
+  "mutant": "int 0 -> 1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the blast_ppm floor becomes 1; pca.destructive has blast_ppm 0, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !(a[i-1].(string) < a[i].(string)) {",
+  "mutant": "int 1 -> 2",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: i-2 at i=1 reads a[-1] on pca.money_moving's caveats, a runtime panic during package init."
+ },
+ {
+  "file": "jsval.go",
+  "text": "i += n",
+  "mutant": "+= -> -=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: i goes to -1 after the first rune of 'moves money', then s[-1], a runtime panic during package init."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if rq, okq := revRank[q.Rev]; okq && rp >= rq {",
+  "mutant": "binary >= -> <",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: joinProfile keeps the lower class, so pca.impersonation, the only row with implies (external_communication) builds with rev reversible against an implied irreversible, and leqProfile fails 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if d > maxTraitImpliesDepth {",
+  "mutant": "binary > -> <=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: depth 1 <= 8 now reports 'implies depth exceeds'; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "{\"credential_access\", nil, Profile{Risk: 3, Esc: 3, Prules: []string{\"secret_not_logged\"}}, \"reads or handles credentials\"},",
+  "mutant": "int 3 -> +1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.credential_access gets risk 4 (col 43) or esc 4 (col 51), outside 0..3, so registryErrorRaw returns an error and actions_traits.go:395 panics.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions.go",
+  "text": "if !contains(b, x) {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: subsetS fails on a shared element; pca.impersonation, the only row with implies (external_communication) shares caveat rate_cap, so leqProfile fails 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !in(p[\"esc\"], 0, 3) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the esc check always refuses; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok || jsLen(cp) == 0 || jsLen(cp) > 120 {",
+  "mutant": "binary > -> <=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: a card_phrase of 120 or fewer units is now refused; 'moves money' has 11, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if rq, okq := revRank[q.Rev]; okq && rp >= rq {",
+  "mutant": "binary && -> ||",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: joinProfile keeps p.Rev whenever q's class is known, so pca.impersonation, the only row with implies (external_communication) builds with rev reversible; its implied floor has irreversible, and leqProfile fails 'floor is below the floor of implied', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "{\"unreviewed\", nil, Profile{Risk: 3, Rev: \"irreversible\", Blast: 1_000_000, Esc: 2, Caveats: []string{\"approval_ref\", \"resource_scope\"}, Context: []string{\"dry_run_first\"}}, \"has not been reviewed yet\"},",
+  "mutant": "int 1_000_000 -> +1",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.unreviewed gets blast_ppm 1000001, above ppmMax, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "sigstore/sigstore.go",
+  "text": "case f < 0:",
+  "mutant": "int 0 -> 1",
+  "reason": "jsNum takes the negative branch for f < 1. f >= 1 and f <= -1 print as before; any f with 0 < |f| < 1 alternates sign in '-' + jsNum(-f) for ever. No other input differs."
+ },
+ {
+  "file": "action_schema.go",
+  "text": "if seen[s] {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: distinctStrings fails any non-empty list; pca.impersonation, the only row with implies (external_communication) gets 'implies must be up to 8 distinct trait ids', so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !isL || len(a) > 64 {",
+  "mutant": "remove !",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: an actual array is now refused; pca.money_moving's caveats is one, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if by[id] != nil {",
+  "mutant": "binary != -> ==",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: an id not yet seen now counts as 'defined twice'; pca.money_moving is first, so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if strings.HasPrefix(id, \"pca.\") && !core {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before TestMain or any test, and panics at actions_traits.go:395 on any registry error, so no test can run. With this condition always true the first row of coreTable, pca.money_moving, gets 'the pca. namespace is reserved for core traits' although core is true, the exact panic in the run log."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if d < 0 {",
+  "mutant": "binary < -> >=",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before TestMain or any test, and panics at actions_traits.go:395 on any registry error, so no test can run. walk returns a depth of at least 1 for a table with no cycle, so `d >= 0` is true on the first row, pca.money_moving, and registryErrorRaw reports 'implies cycle', the exact panic in the run log."
+ },
+ {
+  "file": "attest_nvidia_ocsp.go",
+  "text": "p = k.end",
+  "mutant": "remove assignment",
+  "reason": "ocspKids: with p never advancing, `for p < n.end` stays true, and the next readOcspNode(b, p, n.end) reads the same first child again (the first read succeeded, or the function would already have returned its error), so `out = append(out, k)` grows the slice by one element per pass for ever until the process runs out of memory. It is reached by every node that has at least one child; the original advances p to k.end and ends at n.end."
+ },
+ {
+  "file": "attest_nvidia_ocsp.go",
+  "text": "if !childOK {",
+  "mutant": "if-cond -> false",
+  "reason": "ocspBER: a failed child (childOK false, e == 0) is no longer returned. rem becomes rem-(0-cur) and cur becomes 0, so the loop condition `vlen > 0 && (indefinite || rem > 0)` stays true (vlen is unchanged and rem only grew), and the next pass parses from offset 0 again. s.nodes passes ocspMaxNodes after at most 10000 calls and from then on every call returns at once with ok false, so the loop never leaves and allocates nothing: it spins for ever. Any input with a failing child inside a container reaches it; the original returns (0,0,false,false) there."
+ },
+ {
+  "file": "attest_nvidia_ocsp.go",
+  "text": "for i := 0; i < last; i++ {",
+  "mutant": "++ -> --",
+  "multiplicity": 2,
+  "reason": "checkNvidiaChainOcsp has four such loops; with last >= 1 two of the mutants never end. In the statuses loop, i counts down from 0 while i < last stays true and `statuses[i] = \"absent\"` adds a new map key on every pass (no chain entry is read), so the map grows without bound until the process runs out of memory. In the final required-certificate loop, i counts down from 0, required[i] is false for every negative i and nothing returns, so the loop spins for ever without allocating (whenever every required certificate was GOOD, which the passing tests have). The two loops that index chain[i] (required, and the response loop) panic at chain[-1] and are decided by the failing test, not listed. last == 0 skips all four loops, as before."
+ },
+ {
+  "file": "authorize.go",
+  "text": "defer s.mu.Unlock()",
+  "mutant": "remove defer",
+  "reason": "the mutex stays locked after the first return of the method (MemoryStateStore.ConsumeOnce, Claim, Pin, RaisePin or Last); the next call that takes it on the same store blocks on Lock forever, so the mutant itself never terminates. The unmutated code unlocks on every return and panic path and passes the same tests within the limit. A store is called more than once in these tests (for example claimBurst makes 25+ Claim calls on one store).",
+  "multiplicity": 4
+ },
+ {
+  "file": "authorize.go",
+  "text": "if s.last == nil {",
+  "mutant": "if-cond -> false",
+  "reason": "NewMemoryStateStore returns a store whose last map is nil; the first Claim that gets past the replay test writes s.last[key] = counter into the nil map, a runtime panic ('assignment to entry in nil map'). The mutant never allocates the map, so every first Claim on a new store crashes the process; the unmutated code allocates it and passes."
+ },
+ {
+  "file": "authorize.go",
+  "text": "if s.last == nil {",
+  "mutant": "binary == -> !=",
+  "reason": "With == -> != the allocation runs only when the map is already non-nil, so a new store (last nil) still reaches s.last[key] = counter on a nil map: the same panic ('assignment to entry in nil map') on the first Claim of every new store. The unmutated code allocates and passes."
+ },
+ {
+  "file": "authorize.go",
+  "text": "s.last = map[string]int64{}",
+  "mutant": "remove assignment",
+  "reason": "The nil check passes for a new store and the allocation is gone, so the next statement s.last[key] = counter writes into a nil map: runtime panic on the first Claim of every new store. The unmutated code passes."
+ },
+ {
+  "file": "authorize.go",
+  "text": "a := make([]any, len(t))",
+  "mutant": "remove case body",
+  "reason": "jsonValue: with the case body gone the value leaves the switch for the generic path json.Marshal(v) -> ParseJSONLenient -> jsonValue(x, depth). A []any marshals to a JSON array and parses back to a []any, which hits the same emptied case; depth is not incremented on that path, so the call recurses with the same arguments' type and depth for ever: a Go stack overflow ('goroutine stack exceeds 1000000000-byte limit'), a fatal the test cannot recover from. The unmutated code returns from the case."
+ },
+ {
+  "file": "authorize.go",
+  "text": "return t, true",
+  "mutant": "remove case body",
+  "reason": "jsonValue: with the case body gone the value leaves the switch for the generic path json.Marshal(v) -> ParseJSONLenient -> jsonValue(x, depth). A nil, bool or string marshals to null, true/false or a JSON string and parses back to nil, bool or string, which hits the same emptied case; depth is not incremented on that path, so the call recurses with the same arguments' type and depth for ever: a Go stack overflow ('goroutine stack exceeds 1000000000-byte limit'), a fatal the test cannot recover from. The unmutated code returns from the case."
+ },
+ {
+  "file": "authorize.go",
+  "text": "f, ok := parseJSNumberLexeme(string(t))",
+  "mutant": "remove case body",
+  "reason": "jsonValue: with the case body gone the value leaves the switch for the generic path json.Marshal(v) -> ParseJSONLenient -> jsonValue(x, depth). A json.Number marshals to its number lexeme and ParseJSONLenient returns it as a json.Number again, which hits the same emptied case; depth is not incremented on that path, so the call recurses with the same arguments' type and depth for ever: a Go stack overflow ('goroutine stack exceeds 1000000000-byte limit'), a fatal the test cannot recover from. The unmutated code returns from the case."
+ },
+ {
+  "file": "operations.go",
+  "text": "defer s.mu.Unlock()",
+  "mutant": "remove defer",
+  "reason": "the mutex stays locked after the first return of any method that takes it (MemoryOperationStore.Create, Get, Transition and ListOpen); the next call on the same store blocks on Lock forever, so the mutant itself never terminates. The unmutated code unlocks on every return and panic path and passes the same tests within the limit. A store is called more than once in these tests (for example claimBurst makes 25+ Claim calls on one store).",
+  "multiplicity": 4
+ },
+ {
+  "file": "breakglass.go",
+  "text": "defer r.mu.Unlock()",
+  "mutant": "remove defer",
+  "reason": "the mutex stays locked after the first return of any method that takes it (BreakGlassRegistry.Accept, Use, Review and Frozen); the next call on the same store blocks on Lock forever, so the mutant itself never terminates. The unmutated code unlocks on every return and panic path and passes the same tests within the limit. A store is called more than once in these tests (for example claimBurst makes 25+ Claim calls on one store).",
+  "multiplicity": 4
+ },
+ {
+  "file": "storeconformance.go",
+  "text": "wg.Add(1)",
+  "mutant": "int 1 -> 2",
+  "reason": "Add(2) per goroutine while each goroutine calls Done once, so the counter never returns to 0 and wg.Wait() blocks for ever: the mutant itself never terminates. The unmutated code adds 1 per goroutine and Wait returns once they finish.",
+  "multiplicity": 2
+ },
+ {
+  "file": "storeconformance.go",
+  "text": "defer wg.Done()",
+  "mutant": "remove defer",
+  "reason": "No goroutine ever calls Done, so wg.Wait() blocks for ever: the mutant itself never terminates. The unmutated code defers Done and Wait returns once the goroutines finish.",
+  "multiplicity": 2
+ },
+ {
+  "file": "storeconformance.go",
+  "text": "close(start)",
+  "mutant": "remove call statement",
+  "reason": "Every goroutine blocks on <-start and nothing closes it, so wg.Wait() blocks for ever: the mutant itself never terminates. The unmutated code closes start after launching them.",
+  "multiplicity": 2
+ },
+ {
+  "file": "storeconformance.go",
+  "text": "go func(s OperationStore) {",
+  "mutant": "remove go statement",
+  "reason": "The function literal is called in the calling goroutine and its first statement is <-start, which only close(start) (after the launch loop, never reached) can release: the mutant blocks for ever. The unmutated code runs it on its own goroutine."
+ },
+ {
+  "file": "storeconformance.go",
+  "text": "if err != nil {",
+  "mutant": "binary != -> ==",
+  "reason": "open2 inverts its Open error test: after a successful Open it returns (nil, nil, nil) from the first branch, and the goroutines of the create-once / transition-once checks then call s.Create / s.Transition on a nil OperationStore: a nil-pointer panic in a goroutine, unrecoverable. (After a failed Open it carries on with nil stores to the same panic.) The unmutated code returns the stores and passes.",
+  "racy": true
+ },
+ {
+  "file": "allowlist_anchor.go",
+  "text": "for fn&1 == 0 && fn != 0 {",
+  "mutant": "binary && -> ||",
+  "reason": "fn&1 == 0 || fn != 0 is false only for an odd zero, which does not exist: it is true for fn == 0 (first operand) and for every non-zero fn (second). The body halves fn, which reaches 0 and stays 0, so the loop never ends once entered. It is entered whenever the proof takes the 'fn&1 == 1 || fn == sn' branch for a node after the first, which TestG11VerifyConsistencyExhaustive (every old/new size up to 33) does. The unmutated loop stops at an odd or zero fn."
+ },
+ {
+  "file": "allowlist_anchor.go",
+  "text": "fn >>= 1",
+  "mutant": "remove assignment",
+  "reason": "In the loops at lines 150 and 162 the body shifts fn so the condition (fn odd; fn even and non-zero) can change. Without the shift on fn the condition is identical on every pass, so the loop never ends once entered (fn odd at line 150 for oldSize-1 odd; fn even non-zero at line 162). TestG11VerifyConsistencyExhaustive (every old/new size up to 33) enters both. The unmutated loops shift and terminate.",
+  "multiplicity": 2
+ },
+ {
+  "file": "allowlist_anchor.go",
+  "text": "fn >>= 1",
+  "mutant": "int 1 -> 0",
+  "reason": "fn >>= 0 leaves fn unchanged, the same as removing the shift: in the loops at lines 150 and 162 the condition is then identical on every pass and the loop never ends once entered; TestG11VerifyConsistencyExhaustive (every old/new size up to 33) enters both. The unmutated loops shift by 1 and terminate.",
+  "multiplicity": 2
+ },
+ {
+  "file": "allowlist_anchor.go",
+  "text": "for fn&1 == 1 {",
+  "mutant": "binary & -> |",
+  "reason": "(fn|1) == 1 holds exactly when fn is 0 or 1. The body shifts fn right, so from 1 it reaches 0 and (0|1) == 1 stays true: the loop never ends once entered with fn in {0,1}, i.e. oldSize 1 or 2, which TestG11VerifyConsistencyExhaustive (every old/new size up to 33) uses. The unmutated loop stops at the first even fn."
+ },
+ {
+  "file": "actions.go",
+  "text": "if !ok {",
+  "mutant": "if-cond -> true",
+  "reason": "strsOf (line 123, `a, ok := v.([]any)`) and its element check (line 129, `s, ok := x.(string)`) return nil, false for every input. The shipped core trait table is validated at package var init (coreRegistry = buildCoreRegistry(coreTable), actions_traits.go:377) before any test, and every row's `implies` list is read through strsOf, so registryErrorRaw returns 'implies must be up to 8 distinct trait ids' for pca.money_moving and actions_traits.go panics at init. The unmutated code passes the same tests.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions.go",
+  "text": "if !contains(b, x) {",
+  "mutant": "if-cond -> true",
+  "reason": "subsetS returns false for every non-empty a. The core trait table is validated at package var init (coreRegistry, actions_traits.go:377) before any test and the registry check requires an implying trait's floor caveats to be a subset of its implied trait's; with subsetS always false, pca.impersonation fails 'floor is below the floor of implied pca.external_communication' and actions_traits.go panics at init. The unmutated code passes the same tests."
+ },
+ {
+  "file": "intent_artifacts.go",
+  "text": "if x == s {",
+  "mutant": "if-cond -> false",
+  "reason": "contains returns false for every input. The core trait table is validated at package var init (coreRegistry, actions_traits.go:377) before any test, and the profile member check refuses a key not contained in {risk, rev, blast_ppm, esc, caveats, context, prules}; with contains always false, the first profile member of pca.money_moving ('blast_ppm') is unknown, so actions_traits.go panics at init. The unmutated code passes the same tests."
+ },
+ {
+  "file": "attest_nvidia.go",
+  "text": "o = bodyStart + size",
+  "mutant": "remove assignment",
+  "reason": "parseNvidiaSpdmEvidence advances o over the measurement blocks only through this assignment. Without it, o stays at the block start, `for o < recEnd` re-reads the same block (its bounds checks pass identically) and appends a measurement with a copied digest on every pass: unbounded growth until the process runs out of memory (runtime: out of memory). Any transcript with a non-empty measurement record reaches it; the unmutated code moves o to the next block and ends at recEnd."
+ },
+ {
+  "file": "attest_nvidia.go",
+  "text": "for i := 0; i < len(temp); i += 2 {",
+  "mutant": "remove assignment",
+  "reason": "formatVbiosVersion steps i by 2 only through the `i += 2` post statement. Without it i stays 0, `i < len(temp)` stays true for any non-empty temp, and every pass appends temp[0:2] to parts: unbounded growth until the process runs out of memory (runtime: out of memory). Any VBIOS value of one or more bytes reaches it; the unmutated code ends after len(temp)/2 passes."
+ },
+ {
+  "file": "mesh.go",
+  "text": "if first == 0 {",
+  "mutant": "if-cond -> false",
+  "reason": "meshConsistency: with the empty-old-tree branch skipped, first = 0 < second reaches the walk with oldRoot the empty-tree root (a valid 32-byte hash, so path = [oldRoot]) and fn = first-1 = -1. fn&1 == 1 and fn>>1 == -1 for ever, so `for fn&1 == 1` never ends (no allocation, pure spin). Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (the 0 -> 5 case reaches it.)"
+ },
+ {
+  "file": "mesh.go",
+  "text": "fn, sn := first-1, second-1",
+  "mutant": "int 1 -> 2",
+  "reason": "the mutated literal that times out is the first (first-2): for first = 1 (a power of two, so a valid path) fn = -1, and -1&1 == 1 with -1>>1 == -1, so `for fn&1 == 1` never ends. Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (1 -> 2.)"
+ },
+ {
+  "file": "mesh.go",
+  "text": "for fn&1 == 1 {",
+  "mutant": "binary == -> !=",
+  "reason": "the loop then runs while fn is even; for first = 1, fn = 0, 0&1 != 1 holds and 0>>1 == 0, so it never ends. Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (1 -> 2.)"
+ },
+ {
+  "file": "mesh.go",
+  "text": "for fn&1 == 1 {",
+  "mutant": "binary & -> |",
+  "reason": "the loop condition fn|1 == 1 holds exactly for fn in {0, 1}; for first = 1, fn = 0 and 0>>1 == 0, so it never ends. Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (1 -> 2.)"
+ },
+ {
+  "file": "mesh.go",
+  "text": "for fn&1 == 1 {",
+  "mutant": "int 1 -> 0",
+  "reason": "the mutated literal that times out is the compared one (fn&1 == 0): the loop runs while fn is even; for first = 1, fn = 0 and 0>>1 == 0, so it never ends. Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (1 -> 2.)"
+ },
+ {
+  "file": "mesh.go",
+  "text": "fn >>= 1",
+  "mutant": "remove assignment",
+  "reason": "two loops: the strip loop `for fn&1 == 1` (first = 2 gives fn = 1) and the inner loop `for fn&1 == 0 && fn != 0` (5 -> 6 gives fn = sn = 2). Without the shift fn never changes, so each loop condition stays true for ever (pure spin, no allocation). Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (2 -> 4 and 5 -> 6.)",
+  "multiplicity": 2
+ },
+ {
+  "file": "mesh.go",
+  "text": "fn >>= 1",
+  "mutant": "int 1 -> 0",
+  "reason": "same two loops as the removed shift: fn >>= 0 leaves fn unchanged, so the strip loop (first = 2, fn = 1) and the inner loop (5 -> 6, fn = sn = 2) never end. Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (2 -> 4 and 5 -> 6.)",
+  "multiplicity": 2
+ },
+ {
+  "file": "mesh.go",
+  "text": "for fn&1 == 0 && fn != 0 {",
+  "mutant": "binary && -> ||",
+  "reason": "the inner loop condition becomes fn even OR fn != 0: after the halvings fn reaches 1 (still != 0) then 0 (even), where it stays true with 0>>1 == 0 for ever. Reached by TestR5N5MeshConsistencyWalks, which passes on the unmutated code (the walks 0->5, 1->2, 2->4, 5->6 return true there). (the 3 -> 4 walk in TestG07MeshConsistency and 5 -> 6 enter this block.)"
+ },
+ {
+  "file": "provenance_gate.go",
+  "text": "for fn&1 == 0 && fn != 0 {",
+  "mutant": "binary && -> ||",
+  "reason": "the inner loop condition becomes fn even OR fn != 0: fn halves to 1 then 0 and 0 is even, where fn >>= 1 stays 0 for ever. Reached by TestR5N5IntentMapTreeAndPathWalks (the 6-leaf tree, index 4: step two has fn = sn = 2) and TestR5N5ProvenanceInclusionProofLengths, which pass on the unmutated code."
+ },
+ {
+  "file": "provenance_gate.go",
+  "text": "fn >>= 1",
+  "mutant": "remove assignment",
+  "reason": "inside `for fn&1 == 0 && fn != 0` removing the shift leaves fn even and non-zero for ever (pure spin, no allocation). Reached by TestR5N5IntentMapTreeAndPathWalks (the 6-leaf tree, index 4: step two has fn = sn = 2) and TestR5N5ProvenanceInclusionProofLengths, which pass on the unmutated code."
+ },
+ {
+  "file": "provenance_gate.go",
+  "text": "fn >>= 1",
+  "mutant": "int 1 -> 0",
+  "reason": "fn >>= 0 leaves fn unchanged, so `for fn&1 == 0 && fn != 0` never ends (pure spin). Reached by TestR5N5IntentMapTreeAndPathWalks (the 6-leaf tree, index 4: step two has fn = sn = 2) and TestR5N5ProvenanceInclusionProofLengths, which pass on the unmutated code."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "for fn%2 == 0 && fn != 0 {",
+  "mutant": "binary && -> ||",
+  "reason": "the inner loop condition becomes fn even OR fn != 0: fn halves to 1 then 0 and 0 is even, where fn /= 2 stays 0 for ever. Reached by TestR5N5IntentMapTreeAndPathWalks (the 6-leaf tree, index 4: step two has fn = sn = 2) and TestR5N5ProvenanceInclusionProofLengths, which pass on the unmutated code."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "fn /= 2",
+  "mutant": "remove assignment",
+  "reason": "inside `for fn%2 == 0 && fn != 0` removing the division leaves fn even and non-zero for ever (pure spin). The other fn /= 2 (the loop epilogue) is not a timeout. Reached by TestR5N5IntentMapTreeAndPathWalks (the 6-leaf tree, index 4: step two has fn = sn = 2) and TestR5N5ProvenanceInclusionProofLengths, which pass on the unmutated code."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "fn /= 2",
+  "mutant": "int 2 -> -1",
+  "reason": "fn /= -1 flips the sign of fn (2, -2, 2, ...): it stays even and non-zero, so `for fn%2 == 0 && fn != 0` never ends. Reached by TestR5N5IntentMapTreeAndPathWalks (the 6-leaf tree, index 4: step two has fn = sn = 2) and TestR5N5ProvenanceInclusionProofLengths, which pass on the unmutated code."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "k := 1",
+  "mutant": "int 1 -> 0",
+  "reason": "mapTreeRoot: k = 0 and k *= 2 stays 0, so `for k*2 < len(hs)` (0 < len) never ends for any len(hs) >= 2 (pure spin). Reached by every tree of two or more leaves (TestR5N5IntentMapTreeAndPathWalks, TestKillEMapCommitPrimitive)."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "k *= 2",
+  "mutant": "remove assignment",
+  "reason": "mapTreeRoot: k stays 1, so `for k*2 < len(hs)` (2 < len) never ends for any len(hs) >= 3 (pure spin). Reached by the 3- and 6-leaf trees of TestR5N5IntentMapTreeAndPathWalks, which pass on the unmutated code."
+ },
+ {
+  "file": "intent_map.go",
+  "text": "k *= 2",
+  "mutant": "int 2 -> -1",
+  "reason": "mapTreeRoot: k alternates 1, -1, 1, ... so k*2 is 2 or -2, both < len(hs) for len(hs) >= 3, and the loop never ends (pure spin). Reached by the 3- and 6-leaf trees of TestR5N5IntentMapTreeAndPathWalks, which pass on the unmutated code."
+ },
+ {
+  "file": "attest_intel_collateral.go",
+  "text": "e = ent.end",
+  "mutant": "remove assignment",
+  "reason": "parseCRL: `for e < n.end` never advances e, so the same revoked entry is parsed again for ever (it re-sets the same map key: no growth). Reached by every CRL with a revoked list (TestK05G06ParseCRLShapes), which passes on the unmutated code."
+ },
+ {
+  "file": "attest_intel_collateral.go",
+  "text": "for i := 0; i+1 < len(s); i += 2 {",
+  "mutant": "remove assignment",
+  "reason": "hexDecodeLoose: i never advances, so i+1 < len(s) stays true and every iteration appends one byte to out: unbounded growth until the process is killed by the memory cap (the reported out-of-memory). Reached by every hex string of two or more valid digits (TestR5N5IntelSmallHelpers, the PCS signature check), which pass on the unmutated code."
+ },
+ {
+  "file": "attest_intel_collateral.go",
+  "text": "i++",
+  "mutant": "++ -> --",
+  "reason": "rawJSONObject: at a backslash inside a string the escape handler is `i++` to skip the escaped byte and the loop's own i++ follows; with i-- the two cancel, so i stays on the backslash and the same branch runs again for ever. Reached by TestR5N5IntelRawJSONObjectEscapes (an escaped quote inside the member), which passes on the unmutated code."
+ },
+ {
+  "file": "ed25519strict.go",
+  "text": "edD2 = new(big.Int).Lsh(edD, 1)",
+  "mutant": "remove assignment",
+  "reason": "edD2 stays nil and the very next init statement `edD2.Mod(edD2, edP)` dereferences it: a nil-pointer panic during package init, before any test runs. The unmutated code assigns it first."
+ },
+ {
+  "file": "attest_cert.go",
+  "text": "p = k.end",
+  "mutant": "remove assignment",
+  "reason": "certKids: the loop is `for p := e.start; p < e.end;` with no post statement, so without `p = k.end` p never advances: every pass reads the same child, appends it to out and loops again, growing out without bound until the process runs out of memory. Any non-empty SEQUENCE with a readable first child reaches it (parseCertDER, algID and every extension reader call certKids)."
+ },
+ {
+  "file": "pca.go",
+  "text": "for n > 1 {",
+  "mutant": "binary > -> >=",
+  "reason": "pathShape: with n >= 1 as the condition the loop runs at n == 1, where split(1) = 1 and idx is 0 (idx < n always), so it takes the idx < k branch, appends \"R\" and sets n = k = 1 again: n never drops below 1 and out grows without bound until out of memory. Every call with n >= 1 reaches n == 1."
+ },
+ {
+  "file": "pca.go",
+  "text": "for n > 1 {",
+  "mutant": "int 1 -> 0",
+  "reason": "pathShape: with n > 0 as the condition the loop runs at n == 1, where split(1) = 1 and idx is 0, so it appends \"R\" and sets n = k = 1 again: n never drops below 1 and out grows without bound until out of memory. Every call with n >= 1 reaches n == 1."
+ },
+ {
+  "file": "pca.go",
+  "text": "n = k",
+  "mutant": "remove assignment",
+  "reason": "pathShape: in the idx < k branch n is the only value that shrinks the problem; without n = k, n and idx stay as they are, idx < k stays true (k = split(n) is fixed), and the loop appends \"R\" forever, growing out without bound until out of memory. Any call with idx < split(n), such as pathShape(0, 2), reaches it."
+ },
+ {
+  "file": "pca.go",
+  "text": "for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {",
+  "mutant": "remove assignment",
+  "reason": "pathShape's reversal loop: removing the post statement `i, j = i+1, j-1` leaves i and j fixed, so i < j stays true for every path of two or more steps (pathShape(1, 3) is [L R]) and the loop swaps the same two entries forever. No memory grows; the run ends only at the test timeout."
+ },
+ {
+  "file": "sigstore/sigstore.go",
+  "text": "o = c.end",
+  "mutant": "remove assignment",
+  "reason": "kids walks the children of a TLV with `for o := t.body; o < t.end;` and this assignment is the only thing that advances o. Without it every iteration re-reads the same child (tlv(b, o, t.end) at the same o returns the same value or throws on the first pass, in which case the behaviour is the original's) and appends it to out, which grows without bound until the process runs out of memory. The unmutated loop advances o to c.end > o each pass and ends."
+ },
+ {
+  "file": "attest_xml.go",
+  "text": "i += j + 1",
+  "mutant": "remove assignment",
+  "reason": "In xmlDecode (line 58) this advances i past the entity just read. Without it the loop restarts at the same '&', finds the same entity and, for every defined or numeric reference, writes at least one byte to the builder again and again with i unchanged: the builder grows without bound until the process runs out of memory (an invalid entity returns its error before reaching this line, as in the original). The unmutated code advances i past each entity and ends. The two other `i += j + 1` lines (DOCTYPE and end tag) are killed by TestR5N7_XMLReaderTerminatesOnEveryConstruct."
+ },
+ {
+  "file": "attest_xml.go",
+  "text": "for e := n; e != nil; e = e.parent {",
+  "mutant": "remove assignment",
+  "reason": "In scope() (line 406) `e = e.parent` is the only thing that moves e up the tree. Without it, for any non-nil n the loop appends n to chain on every iteration and never ends, so chain grows without bound until the process runs out of memory. The unmutated loop follows the finite parent chain (parent pointers are set once, from the parent being built) and ends. The other `for e := n; ...` line, lookupNS, is killed by TestR5N7_XMLLookupNSEnds."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "by[id] = t",
+  "mutant": "remove assignment",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: by never gets an entry, so pca.impersonation, the only row with implies (external_communication), reports 'implies unknown trait' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if s, ok := x.(string); !ok || !c.ok(s) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every list member is refused; pca.money_moving's caveats are non-empty, so it reports 'profile.caveats must be an array of known caveats entries' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "p.Rev = \"reversible\"",
+  "mutant": "remove assignment",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: rows that set no Rev keep ''; the first is pca.data_export, whose rev '' fails 'profile.rev is not a reversibility class' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "p.Caveats, p.Context, p.Prules = sortUniqS(p.Caveats), sortUniqS(p.Context), sortUniqS(p.Prules)",
+  "mutant": "remove assignment",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the sets stay in table order; pca.money_moving's prules (money_has_currency, money_amount_bounded, pay_has_idempotency) are not sorted, so it reports 'profile.prules must be sorted and distinct' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "return \"\"",
+  "mutant": "return empty -> reason",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test, and panics when registryErrorRaw returns non-empty (actions_traits.go:395). The mutant returns a non-empty reason from the final return of profileErrorRaw (actions_traits.go:91): every floor profile is refused, so registryErrorRaw returns an error; and from the final return of registryErrorRaw (actions_traits.go:216): the result is non-empty for the whole shipped table. Either way the panic fires at init and no test can run. The unmutated code returns \"\" for the shipped table and passes.",
+  "multiplicity": 2
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if k, bad := unknownMember(p, []string{\"risk\", \"rev\", \"blast_ppm\", \"esc\", \"caveats\", \"context\", \"prules\"}); bad {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: unknownMember is taken as true for every profile; pca.money_moving's floor reports \"profile: unknown member ''\" so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "fl = joinProfile(fl, reg[\"pca.\"+n].Floor)",
+  "mutant": "remove assignment",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: pca.impersonation, the only row with implies, no longer joins the floor of external_communication, so its rev (reversible) is below the implied irreversible and it reports 'floor is below the floor of implied' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if d, ok := depth[id]; ok {",
+  "mutant": "if-cond -> false",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the depth memo is never consulted, so the walk of pca.impersonation reaches external_communication, which is still in visiting from its own walk, and returns -1: 'implies cycle' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "reg[id] = TraitDef{ID: id, Implies: imp, Floor: fl, Card: e.phrase}",
+  "mutant": "remove assignment",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: reg stays empty, so reg[id].raw() is the zero TraitDef and the first raw trait has id '': \"trait id '' is malformed\" so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !isL || len(im) > 8 || !allS || !distinctStrings(im) {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the implies check is true for every trait, so pca.money_moving (empty implies) reports 'implies must be up to 8 distinct trait ids' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "visiting[id] = true",
+  "mutant": "remove assignment",
+  "reason": "The only write to visiting is gone, so walk never reports -1 for a trait that implies itself or a cycle: walk(a) -> walk(b) -> walk(a) recurses without bound (depth is written only after a walk returns), until the Go runtime aborts with 'goroutine stack exceeds 1000000000-byte limit'. The shipped core table is acyclic, so the package still initialises; the unmutated code returns 'implies cycle' for the same input."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if rq, okq := revRank[q.Rev]; okq && rp >= rq {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the rev join takes p.Rev whenever it is a known class, so pca.impersonation's floor (join of reversible and the implied irreversible) stays reversible and reports 'floor is below the floor of implied' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "depth[id] = d // a finished id may stay in visiting: the depth memo answers before visiting is consulted",
+  "mutant": "remove assignment",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: depth is never stored, so external_communication (walked first as an own trait) stays in visiting without a depth, and the walk of pca.impersonation reaches it and returns -1: 'implies cycle' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !ok || jsLen(cp) == 0 || jsLen(cp) > 120 {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the card_phrase check is true for every trait, so pca.money_moving reports 'card_phrase must be a non-empty string up to 120 characters' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if !isL || len(a) > 64 {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: the list check is true for every list, so pca.money_moving's floor reports 'profile.caveats must be an array of known caveats entries' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "actions_traits.go",
+  "text": "if _, isArr := tv.([]any); isArr {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: every trait is read as an array, i.e. as an object with no members, so pca.money_moving reports \"trait id 'undefined' is malformed\" so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "if !ok {",
+  "mutant": "if-cond -> true",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: jsF returns NaN for every value, so pca.money_moving's floor fails 'profile.risk must be an integer in 0..3' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "return float64(t), true",
+  "mutant": "remove case body",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: jsNum no longer reads an int, so jsF of the Go int risk of pca.money_moving's raw floor is NaN and it fails 'profile.risk must be an integer in 0..3' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "out = append(out, uint16(r))",
+  "mutant": "remove assignment",
+  "reason": "buildCoreRegistry validates the shipped table during package var init (coreRegistry, actions_traits.go:377), before any test: utf16Units drops every BMP rune, so jsLen of pca.money_moving's card phrase is 0 and it reports 'card_phrase must be a non-empty string up to 120 characters' so registryErrorRaw returns an error and actions_traits.go:395 panics."
+ },
+ {
+  "file": "jsval.go",
+  "text": "i += 3",
+  "mutant": "remove assignment",
+  "reason": "The loop index no longer advances past a WTF-8 lone-surrogate triple, so the same 0xED byte matches the branch again on every iteration and the loop never ends, growing without bound: in wellFormedUTF8 (jsval.go:275) the builder gets one U+FFFD per iteration; in utf16Units (jsval.go:244) the out slice gets the same code unit appended per iteration; both until the process dies (runtime: out of memory). The unmutated code advances 3 bytes and terminates for the same input.",
+  "multiplicity": 2
+ },
+ {
+  "file": "agent.go",
+  "text": "a.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "Agent.Act: the matching a.mu.Unlock() (agent.go:1122) now releases a mutex that was never locked, which is 'fatal error: sync: unlock of unlocked mutex': a runtime fatal, not a panic, so nothing can recover it and the binary dies. Every Act that resolves its plan node reaches the Lock/Unlock pair (no branch skips it). The unmutated code locks first and passes the same tests."
+ },
+ {
+  "file": "lease.go",
+  "text": "r.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: LeaseRegistry.Accept, LeaseRegistry.Revoke and LeaseRegistry.lookup (each has the deferred Unlock on the next line). Every path out of each function, a panic included, runs that deferred Unlock, so the first call of any of them dies. The unmutated code locks first and passes the same tests.",
+  "multiplicity": 3
+ },
+ {
+  "file": "atomic_kv.go",
+  "text": "s.mu.Lock()",
+  "mutant": "remove call statement",
+  "multiplicity": 2,
+  "reason": "MemoryAtomicKV.Get (line 35) and Update (line 43) each pair the Lock with `defer s.mu.Unlock()` on the next line. With the Lock gone, the deferred Unlock of an unlocked sync.Mutex is a runtime fatal ('fatal error: sync: unlock of unlocked mutex'), which no recover can catch, on every return of either method (the first call already ends the process). The unmutated code passes the same tests."
+ },
+ {
+  "file": "storeconformance.go",
+  "text": "return nil, nil, err",
+  "mutant": "return error -> nil",
+  "reason": "open2's first Open error is swallowed: it returns (nil, nil, nil) after a failed Open. The check then starts c.Copies goroutines that call Create / Transition on the nil OperationStore interface, and the nil dereference panics inside a goroutine, which no recover in the test or the checker can catch, so the test binary dies with no test failing. The unmutated code returns the error and the check reports it.",
+  "racy": true
+ },
+ {
+  "file": "storeconformance.go",
+  "text": "if err != nil {",
+  "mutant": "if-cond -> true",
+  "reason": "open2 (line 383): `a, err := c.Open(); if err != nil { return nil, nil, err }`. With the condition forced true, open2 returns (nil, nil, nil) for every successful Open. RunOperationStoreConformance's first check then starts c.Copies goroutines that call Create on a nil OperationStore interface: the nil dereference panics inside a goroutine, which no recover in the test or in the checker can catch, so the whole test binary dies with 'no test failed'. The unmutated open2 returns the opened stores and the same conformance tests pass.",
+  "racy": true
+ },
+ {
+  "file": "authorize.go",
+  "text": "m := make(map[string]any, len(t))",
+  "mutant": "remove case body",
+  "racy": true,
+  "reason": "jsonValue: with the map case body gone the value leaves the switch for the generic path json.Marshal(v) -> ParseJSONLenient -> jsonValue(x, depth). A map[string]any marshals to a JSON object and parses back to a map[string]any, which hits the same emptied case; depth is not incremented on that path, so the call recurses with the same type and depth for ever: a Go stack overflow ('goroutine stack exceeds 1000000000-byte limit'), a fatal the test cannot recover from. Racy: a test with a deadline can fail first (the mutant was KILLED in 42709333483 and a run error in 42741419864), which the gate accepts only when the occurrence was plainly killed in the same run. The unmutated code returns from the case."
+ },
+ {
+  "file": "budgetstore.go",
+  "text": "s.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: MemoryStateStore.Budget and MemoryStateStore.ClaimBudgeted (each has the deferred Unlock on the next line). Every path out of the function, a panic included, runs that Unlock, so the first call of either dies.",
+  "multiplicity": 2
+ },
+ {
+  "file": "registryconformance.go",
+  "text": "if err != nil {",
+  "mutant": "if-cond -> false",
+  "reason": "in the atomic-update and concurrent-debits cases, a failed Open returns (nil, err) and the guard is gone, so the nil handle is used: h.Update / h.ClaimBudgeted on a nil interface in a goroutine, a runtime panic (nil pointer dereference) that cannot be recovered from the test. The unmutated code returns the error before using the handle.",
+  "multiplicity": 2
+ },
+ {
+  "file": "registryconformance.go",
+  "text": "wg.Add(1)",
+  "mutant": "remove call statement",
+  "reason": "the goroutine's deferred wg.Done() runs on every exit with a counter of zero: panic 'sync: negative WaitGroup counter' in a goroutine, an unrecoverable crash of the test process. When wg.Wait() returns (counter zero) before a goroutine finishes, the check reads an incomplete claim count and a test fails instead, so the mutant is sometimes plainly killed. Both concurrent claim checks (lines 80 and 252) start their goroutines this way, so the mutant appears at each.",
+  "racy": true,
+  "multiplicity": 2
+ },
+ {
+  "file": "registryconformance.go",
+  "text": "mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "the Unlock that follows (the explicit mu.Unlock() after recording the first error, and the deferred one in the concurrent-debits goroutine) runs on an unlocked mutex: 'sync: unlock of unlocked mutex' is an unrecoverable runtime fatal. The debits goroutine hits it on every run; the writers goroutine when an Update fails.",
+  "multiplicity": 2
+ },
+ {
+  "file": "registryconformance.go",
+  "text": "wg.Add(1)",
+  "mutant": "int 1 -> 0",
+  "racy": true,
+  "reason": "Add(0) leaves the WaitGroup counter at zero, so the goroutine started next runs its deferred wg.Done() against a zero counter: panic \"sync: negative WaitGroup counter\" inside a goroutine, which no recover in the test or the checker can catch, so the test binary dies with no test failing. When wg.Wait() returns (counter already zero) before that goroutine finishes, the check instead reads an incomplete claim count and a test fails, so the mutant is sometimes plainly killed. The unmutated code adds 1 per goroutine and passes. Both concurrent claim checks (lines 80 and 252) start their goroutines this way, so the mutant appears at each.",
+  "multiplicity": 2
+ },
+ {
+  "file": "ed25519strict.go",
+  "text": "edPointMemo.Unlock()",
+  "mutant": "remove call statement",
+  "reason": "edStrictPoint takes edPointMemo twice: the memo read (Lock line 125, Unlock line 127) and the memo write (Lock line 132, Unlock line 137). sync.Mutex is not reentrant. Without the read Unlock, a miss blocks for ever on the write Lock of the same call and a hit blocks the next call's read Lock; without the write Unlock, the next call blocks on its read Lock. Every signature verification checks its key and R, so the test binary hangs until go test -timeout expires; no assertion can fail first. The unmutated code releases the lock on every path.",
+  "multiplicity": 2
+ },
+ {
+  "file": "atomic_kv.go",
+  "text": "defer s.mu.Unlock()",
+  "mutant": "remove defer",
+  "multiplicity": 2,
+  "reason": "MemoryAtomicKV.Get (line 36) and Update (line 44) each take s.mu with Lock and release it only through this defer. With the defer gone the mutex stays held after the first call returns; sync.Mutex is not reentrant, so the next Get or Update on the same store (every store kit and conformance check makes several) blocks for ever on s.mu.Lock(). Other goroutines (test timers) keep the runtime from reporting a deadlock, so the test binary hangs until go test -timeout expires; no assertion can fail first. Racy: a test that runs the store call on its own goroutine under a deadline (the conformance kits' race checks) reports a plain failure when the stuck goroutine misses that deadline, so a given run may show a site as killed instead of timed out; it is never a pass.",
+  "racy": true
+ },
+ {
+  "file": "ed25519strict.go",
+  "text": "for i := k.BitLen() - 1; i >= 0; i-- {",
+  "mutant": "-- -> ++",
+  "reason": "edMul's ladder starts at i = k.BitLen()-1 and now counts up: i >= 0 holds until int overflows after about 2^63 iterations, each a big-integer point doubling, so edMul never returns for any k with BitLen >= 1. edStrictPointUncached calls edMul(p, edL) (line 146) for every canonical on-curve point, so the first valid key or R checked (every signature verification test) never returns; the test binary hangs until go test -timeout expires."
+ },
+ {
+  "file": "strictjson.go",
+  "text": "return",
+  "mutant": "remove case body",
+  "reason": "jparser.ws (line 82): the default case (a non-whitespace byte) no longer returns, so the loop `for p.i < len(p.s)` sees the same byte again without advancing p.i, for ever. Every JSON value has a non-whitespace byte after leading whitespace is skipped (ws is called before every value), so any parse never returns; the test binary hangs until go test -timeout expires."
+ },
+ {
+  "file": "strictjson.go",
+  "text": "p.i++",
+  "mutant": "remove case body",
+  "reason": "jparser.str (line 120): the closing-quote case `p.i++; return` is emptied, so at the closing '\"' the switch falls out without advancing p.i and the `for` loop reads the same quote again, for ever (no other case matches '\"'). Every terminated JSON string reaches its closing quote, so any parse of a document holding a string never returns; the test binary hangs until go test -timeout expires."
+ },
+ {
+  "file": "strictjson.go",
+  "text": "sb.WriteByte(c)",
+  "mutant": "remove case body",
+  "reason": "jparser.str (line 178): the default case (any byte other than '\"', a raw control character in strict mode, or '\\\\') is emptied, so `sb.WriteByte(c); p.i++` no longer runs: p.i stays on that byte and the `for` loop reads it again, for ever (the switch picks the same case each time). Every JSON string holding an ordinary character reaches this case, so any parse of such a document never returns; the test binary hangs until go test -timeout expires."
+ },
+ {
+  "file": "facade.go",
+  "text": "a.mu.Lock()",
+  "mutant": "remove call statement",
+  "reason": "sync: unlock of unlocked mutex is an unrecoverable runtime fatal, and the Lock is gone in: FacadeAgent.Act, the counter update (Lock line 665, Unlock line 674). The critical section has no branch that leaves before the Unlock (the counter max or increment only), so every Act reaches the Unlock of the unlocked mutex.",
+  "multiplicity": 1
+ },
+ {
+  "file": "facade.go",
+  "text": "a.mu.Unlock()",
+  "mutant": "remove call statement",
+  "reason": "FacadeAgent.Act takes a.mu once per call (Lock line 665, Unlock line 674) and sync.Mutex is not reentrant. Without the Unlock the first Act returns holding the lock and the next Act on the same agent blocks for ever on its Lock; the facade tests act more than once on one agent (the counter tests), so the test binary hangs until go test -timeout expires and no assertion can fail first. The unmutated code releases the lock on every path.",
+  "multiplicity": 1
+ }
+]

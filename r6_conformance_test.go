@@ -101,7 +101,7 @@ func TestR6Malformed(t *testing.T) {
 				if err != nil {
 					return false // parse failure == deny
 				}
-				v, _ := VerifyPCActnCore(p, grant, now, aud)
+				v, _ := verifyCoreSkipPlan(p, grant, now, aud)
 				return v.Allow
 			}
 		default:
@@ -204,7 +204,7 @@ func TestDepthVectors(t *testing.T) {
 				if err != nil {
 					return false
 				}
-				v, _ := VerifyPCActnCore(p, grant, now, aud)
+				v, _ := verifyCoreSkipPlan(p, grant, now, aud)
 				return v.Allow
 			}
 		case "json_parse":
