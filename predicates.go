@@ -6,7 +6,11 @@ package pca
 // matched). Strings are compared and measured in UTF-16 code units where JavaScript does (`length`, `startsWith`,
 // globs, regex subjects) and ordered by UTF-8 bytes (the normative string order of lt/lte/gt/gte).
 
-import "strings"
+import (
+	"math"
+	"strconv"
+	"strings"
+)
 
 const (
 	triTrue = iota
@@ -595,4 +599,169 @@ func evaluatePredicates(predicates any, ctx map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// ---- naming the unmet limit in a denial reason (0.5) ----------------------------------------------------------------
+
+var opText = map[string]string{"eq": "==", "ne": "!=", "lt": "<", "lte": "<=", "gt": ">", "gte": ">=", "in": "in",
+	"nin": "not in", "prefix": "starts with", "like": "like", "matches": "matches", "is_a": "is a", "member_of": "member of"}
+
+const (
+	maxShownString = 64
+	maxShownItems  = 8
+)
+
+// showValue spells out a scalar operand of a denial reason: only safe integers, booleans, null and plain short strings;
+// a top-level array of at most 8 such values.
+func showValue(v any, depth int) string {
+	switch x := v.(type) {
+	case nil:
+		return "null"
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	case string:
+		if len(utf16Units(x)) > maxShownString {
+			return `"..."`
+		}
+		for _, r := range x {
+			if r < 0x20 || r == '"' || r == '\\' || r > 0xFFFF {
+				return `"..."`
+			}
+		}
+		return `"` + x + `"`
+	case []any:
+		if depth != 0 {
+			return "<value>"
+		}
+		if len(x) > maxShownItems {
+			return "[...]"
+		}
+		parts := make([]string, len(x))
+		for i, e := range x {
+			parts[i] = showValue(e, 1)
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	}
+	if f, ok := jsNum(v); ok {
+		if isFinite(f) && f == math.Trunc(f) && math.Abs(f) <= 9007199254740991 {
+			return strconv.FormatInt(int64(f), 10)
+		}
+		return "<number>"
+	}
+	return "<value>"
+}
+
+func isGroupCond(c map[string]any) bool {
+	_, a := c["all_of"]
+	_, b := c["any_of"]
+	_, n := c["not"]
+	return a || b || n
+}
+
+func describeChildren(x []any, depth int) string {
+	if len(x) > maxShownItems {
+		x = x[:maxShownItems]
+	}
+	parts := make([]string, len(x))
+	for i, e := range x {
+		parts[i] = describeCondition(e, depth+1)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// describeCondition is the condition as the limit a reader recognises: `amount <= 500`, `currency in ["usd", "eur"]`.
+func describeCondition(cv any, depth int) string {
+	c, ok := cv.(map[string]any)
+	if !ok {
+		return "<condition>"
+	}
+	if isGroupCond(c) {
+		if depth >= 2 {
+			return "(...)"
+		}
+		if arr, ok := c["all_of"].([]any); ok {
+			return "all of (" + describeChildren(arr, depth) + ")"
+		}
+		if arr, ok := c["any_of"].([]any); ok {
+			return "any of (" + describeChildren(arr, depth) + ")"
+		}
+		if n, has := c["not"]; has {
+			return "not (" + describeCondition(n, depth+1) + ")"
+		}
+		return "<condition>"
+	}
+	name := "<field>"
+	if f, ok := c["field"].(string); ok {
+		name = strings.TrimPrefix(f, "action.params.")
+	}
+	if c["op"] == any("exists") {
+		if c["value"] == any(false) {
+			return name + " absent"
+		}
+		return name + " present"
+	}
+	opName, _ := c["op"].(string)
+	op, known := opText[opName]
+	if !known {
+		return name + " <condition>"
+	}
+	if r, has := c["ref"]; has {
+		if s, ok := r.(string); ok {
+			return name + " " + op + " " + s
+		}
+		return name + " " + op + " <ref>"
+	}
+	val, hasVal := c["value"]
+	if !hasVal {
+		return name + " " + op + " <value>" // an absent operand is JavaScript undefined
+	}
+	return name + " " + op + " " + showValue(val, 0)
+}
+
+// narrowestUnmet descends an unmet `all_of` to its first child that is not true (depth <= 4).
+func narrowestUnmet(cv any, ctx map[string]any, b *regexBudget, depth int) any {
+	if c, ok := cv.(map[string]any); ok && depth < 4 && isGroupCond(c) {
+		if arr, ok := c["all_of"].([]any); ok {
+			for _, x := range arr {
+				if evaluateConditionTri(x, ctx, b) != triTrue {
+					return narrowestUnmet(x, ctx, b, depth+1)
+				}
+			}
+		}
+	}
+	return cv
+}
+
+// firstUnmetLimit names the first `where` limit not met by the first predicate whose verb and resource match the
+// action; ok is false when no predicate is in scope (the plain "no predicate permits" wording stays then).
+func firstUnmetLimit(predicates []any, ctx map[string]any, b *regexBudget) (string, bool) {
+	a, _ := ctx["action"].(map[string]any)
+	verb, ok1 := a["verb"].(string)
+	resource, ok2 := a["resource"].(string)
+	if !ok1 || !ok2 {
+		return "", false
+	}
+	for _, pv := range predicates {
+		p, isMap := pv.(map[string]any)
+		if !isMap || !verbMatches(p["verb"], verb) {
+			continue
+		}
+		rp, has := p["resource"]
+		if !resourceMatches(rp, has, resource, b) {
+			continue
+		}
+		where, isArr := p["where"].([]any)
+		if !isArr {
+			continue
+		}
+		for _, c := range where {
+			if evaluateConditionTri(c, ctx, b) != triTrue {
+				return describeCondition(narrowestUnmet(c, ctx, b, 0), 0), true
+			}
+		}
+	}
+	return "", false
 }

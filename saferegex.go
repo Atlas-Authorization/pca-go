@@ -17,6 +17,7 @@ const (
 	maxRegexEvaluationsPerDoc  = 64
 	maxRegexSourceCharsPerDoc  = 8192
 	maxRegexStepsPerDoc        = 5_000_000
+	regexRequestScale          = 4
 	maxRegexCostBits           = 22
 	unboundedQuantifierBits    = 8
 	maxBoundedRepeatSafeSource = 64
@@ -742,18 +743,45 @@ func isSafeRegexSource(src []uint16) bool {
 // evaluateConditionTri call when no document scope is open).
 type regexBudget struct {
 	evaluations, chars, steps int
+	refusals                  int // evaluations refused (uncompilable or over budget): "could not decide", never "no match"
+	// scale multiplies the per-document caps (1 for a document budget, regexRequestScale for a request budget); 0 is 1.
+	scale int
+	// parent is the enclosing request budget every charge of this budget also lands on (nil for a top-level budget).
+	parent *regexBudget
+	// source is the request's client key (set by NewRequestRegexBudgetFor): patterns first compiled under this budget count against
+	// that source's share of the compiled-regex cache.
+	source    string
+	hasSource bool
 }
 
 func (b *regexBudget) charge(src []uint16, subjectLen int) bool {
-	prog := compileSafeRegex(src)
+	prog := cachedProgram(src, b)
 	if prog == nil {
+		b.refusals++
 		return false
 	}
+	return b.chargeProg(len(src), len(prog), subjectLen)
+}
+
+func (b *regexBudget) chargeProg(srcLen, progLen, subjectLen int) bool {
+	k := b.scale
+	if k == 0 {
+		k = 1
+	}
 	ev := b.evaluations + 1
-	chars := b.chars + len(src)
-	steps := b.steps + len(prog)*(subjectLen+1)
-	if ev > maxRegexEvaluationsPerDoc || chars > maxRegexSourceCharsPerDoc || steps > maxRegexStepsPerDoc {
-		b.evaluations = maxRegexEvaluationsPerDoc + 1
+	chars := b.chars + srcLen
+	steps := b.steps + progLen*(subjectLen+1)
+	parent := b.parent
+	if parent == nil && k == 1 { // a document budget with no explicit request budget chains to the ambient provider's
+		if a := ambientRegexBudget(); a != b {
+			parent = a
+		}
+	}
+	if ev > maxRegexEvaluationsPerDoc*k || chars > maxRegexSourceCharsPerDoc*k || steps > maxRegexStepsPerDoc*k ||
+		(parent != nil && !parent.chargeProg(srcLen, progLen, subjectLen)) {
+		// poison the budget so a later, cheaper pattern cannot sneak in after an over-budget one (order-independent refusal)
+		b.evaluations = maxRegexEvaluationsPerDoc*k + 1
+		b.refusals++
 		return false
 	}
 	b.evaluations, b.chars, b.steps = ev, chars, steps
@@ -762,7 +790,7 @@ func (b *regexBudget) charge(src []uint16, subjectLen int) bool {
 
 // safeRegexFullMatch: (match, ok); ok false when src is outside the subset or the per-match budget is exceeded.
 func safeRegexFullMatch(src, subject []uint16) (bool, bool) {
-	prog := compileSafeRegex(src)
+	prog := cachedProgram(src, nil)
 	if prog == nil {
 		return false, false
 	}
