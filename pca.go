@@ -1,6 +1,10 @@
 // Package pca is a reference verifier for the CORE PCActn checks (wire format v2): strict wire form,
 // freshness binding, capability chain, Merkle plan inclusion, strict Ed25519 leaf signature, counter.
 // It byte-matches @atlasauth/pca and passes the format-2 conformance vectors.
+//
+// It is also the agent side: CreateAgent compiles permissions and limits into a signed grant and its handle signs one
+// PCActn per action (Act, SubAgent); MintGrant, Delegate, SignPCActn and the Sign* functions sign the other artifacts,
+// with Ed25519, ML-DSA, SLH-DSA and their hybrids (FN-DSA and LESS signing are refused as unsupported_suite).
 package pca
 
 import (
@@ -8,6 +12,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,6 +47,16 @@ type Verdict struct {
 	Allow  bool
 	Checks map[string]bool
 	Reason string
+	// Reasons lists every reason in order: the first failure (Reason), then one for EACH further failing intent-v2 check
+	// (the escalate-class ones). DecisionOf reads the whole list, so a multi-check escalation stays an escalation.
+	// Empty when Allow, and on a wire failure (Reason only).
+	Reasons []string
+	// LegacyModelPolarity: rule 21's compatibility mode is in effect (model_polarity "legacy" and a grant reads a model-derived
+	// path in where). Authorize reports it as Degraded["tighten"].
+	LegacyModelPolarity bool
+	// NotEnforced names the checks that were switched off by an explicit opt-out and so are neither passed nor failed
+	// (`plan_root_authorized` under InsecureSkipPlanRootCheck). Nil when none.
+	NotEnforced map[string]bool
 }
 
 // ---- strict base64url ----------------------------------------------------------------
@@ -608,6 +624,7 @@ func VerifyChainPolicy(chain []any, expectedRootIssuer string, haveIssuer bool, 
 			why, ok = fmt.Sprintf("malformed capability chain: %v", r), false
 		}
 	}()
+	chainFault()
 	if len(chain) == 0 {
 		return "empty chain", false
 	}
@@ -692,6 +709,30 @@ func VerifyChainPolicy(chain []any, expectedRootIssuer string, haveIssuer bool, 
 			}
 		}
 	}
+	// Carried budget allocations are monotone non-increasing down the chain; the leaf holds the full append-only list.
+	return allocationsMonotone(caps[len(caps)-1]["caveats"]) // a missing or non-array member is refused, as the reference does
+}
+
+// allocationsMonotone is the budget_alloc rule over the flattened caveat list (root first): every limit is a finite number >= 0 and
+// never greater than the previous budget_alloc limit; the first problem in list order decides (the reference allocationsMonotone).
+func allocationsMonotone(cavv any) (string, bool) {
+	cavs, isList := cavv.([]any)
+	if !isList {
+		return "malformed caveats", false // a caveat list that is not an array is refused
+	}
+	prev := math.Inf(1)
+	for i, cv := range cavs {
+		if m, _ := cv.(map[string]any); m["type"] == "budget_alloc" {
+			lim, isN := isNum(m["limit"])
+			if !isN || lim < 0 {
+				return fmt.Sprintf("budget_alloc caveat %d: limit must be a finite number >= 0", i), false
+			}
+			if lim > prev {
+				return fmt.Sprintf("budget_alloc caveat %d: allocation %s widens the parent's carried allocation %s (monotone: a child can only allocate <= its parent)", i, jsNumberString(lim), jsNumberString(prev)), false
+			}
+			prev = lim
+		}
+	}
 	return "", true
 }
 
@@ -706,7 +747,9 @@ var optionalFields = []string{"nonce", "caution", "rationale_commitment", "progr
 	// Intent Layer M2 (additive, SIGNED): the `envelope.intent` binding (intent.go).
 	"intent",
 	// Intent Layer v2 (additive, SIGNED): the `intent_session` member (intent_session.go, rule 13).
-	"intent_session"}
+	"intent_session",
+	// Consistency token (additive, SIGNED): the `fresh_at` member (fresh_at.go).
+	"fresh_at"}
 
 func isObj(v any) (map[string]any, bool) { m, ok := v.(map[string]any); return m, ok }
 func isStr(v any) bool                   { _, ok := v.(string); return ok }
@@ -731,6 +774,7 @@ func ValidateWireV2(pv any) (reason string) {
 			reason = fmt.Sprintf("malformed: %v", r)
 		}
 	}()
+	wireFault()
 	p, ok := isObj(pv)
 	if !ok {
 		return "PCActn is not an object"
@@ -944,6 +988,11 @@ func ValidateWireV2(pv any) (reason string) {
 			return e
 		}
 	}
+	if v, has := p["fresh_at"]; has {
+		if e := validateFreshAtWire(v); e != "" {
+			return e
+		}
+	}
 	if v, has := p["prohibition_evidence"]; has {
 		_, o := isObj(v)
 		_, a := v.([]any)
@@ -1020,7 +1069,7 @@ func WireFailure(why string) Verdict {
 }
 
 // VerifyPCActnCore runs the normative check order: wire, version, audience, validity, chain,
-// grant_ref_bound, plan_inclusion, leaf_signature, counter (then `intent` when the PCActn carries it). now is epoch milliseconds; audience is this verifier's own id.
+// grant_ref_bound, plan_inclusion, leaf_signature, counter_format (then `intent` when the PCActn carries it). now is epoch milliseconds; audience is this verifier's own id.
 func VerifyPCActnCore(pcactn map[string]any, grant map[string]any, now int64, audience string) (v Verdict, err error) {
 	return VerifyPCActnCorePolicy(pcactn, grant, now, audience, nil)
 }
@@ -1031,6 +1080,8 @@ func VerifyPCActnCorePolicy(pcactn map[string]any, grant map[string]any, now int
 	return VerifyPCActnCoreWith(pcactn, grant, now, audience, VerifyOptions{AllowedSuites: allowedSuites})
 }
 
+const zkNoVerifierReason = "PCActn carries a zk_compliance proof but no zk verifier enforced it (fail closed): configure hooks.zk or do not present a proof"
+
 // VerifyOptions are the optional verifier policies of VerifyPCActnCoreWith (the zero value == VerifyPCActnCore).
 type VerifyOptions struct {
 	// AllowedSuites: nil = no restriction; a present (even empty) list refuses any hop or leaf suite not listed.
@@ -1039,9 +1090,75 @@ type VerifyOptions struct {
 	Intent *IntentPolicy
 	// IntentV2 is the Intent Layer v2 verifier state and policy (nil = none). See IntentV2Context.
 	IntentV2 *IntentV2Context
+	// FreshAt is the consistency-token policy (nil = none; a PCActn carrying `fresh_at` is then refused). See FreshAtPolicy.
+	FreshAt *FreshAtPolicy
+	// AuthorizedPlanRoots: the Merkle plan roots this verifier knows the principal authorized. Given (non-nil, even empty),
+	// `plan_root_authorized` is ENFORCED: it passes iff plan.root is listed and fails otherwise. Nil: it fails too (a verifier with
+	// no authorized plan configured refuses), unless InsecureSkipPlanRootCheck is set, which reports it not-enforced.
+	AuthorizedPlanRoots []string
+	// InsecureSkipPlanRootCheck is the explicit, loudly named opt-out of `plan_root_authorized` (see AuthorizedPlanRoots). The list
+	// wins over it. Authorize sets it (it decides the plan itself); a core caller should not.
+	InsecureSkipPlanRootCheck bool
+	// EnforceFreshness is the freshness-anchor gate (nil = off, nothing reported). When set, a missing, stub or stale signed
+	// `freshness` anchor fails the check `freshness_anchor` (its own name: Authorize's `freshness` is the revocation-state check).
+	EnforceFreshness *FreshnessGate
+	// EnforceTaint is the information-flow taint gate (nil = off, nothing is reported).
+	// Every declared provenance ref is re-classified from the server's registry/graph; an unverifiable lineage or a taint above
+	// MaxTaint fails the check `taint_gate`.
+	EnforceTaint *TaintGate
+	// PQPins: the server-side post-quantum pins, grant issuer -> the pq_pk the server pins for it (nil = unset: the `pq_pin` check
+	// is not reported). Given (even empty): an Ed25519 grant passes; a grant of another suite passes iff PQPins has an entry for its
+	// issuer that equals the grant's pq_pk. Without it a PQ or hybrid root is trusted from the stored grant alone.
+	PQPins map[string]string
+	// zkInAuthorize: Authorize reports a carried zk_compliance itself, after its revocation check.
+	zkInAuthorize bool
 }
 
-// VerifyPCActnCoreWith is VerifyPCActnCore with explicit options. The `intent` check runs after `counter` and is
+// DefaultFreshnessEpochMs is the length of one freshness epoch when FreshnessGate.EpochMs is 0.
+const DefaultFreshnessEpochMs = 60_000
+
+// FreshnessGate: the anchor `freshness.epoch * EpochMs` must not be in the future (past ClockSkewMs) and no older than MaxAgeMs.
+// Now overrides the verification time for the gate (nil: the verifier's now). A bad MaxAgeMs (negative or not finite) or a
+// non-positive EpochMs (after the default) is a misconfiguration that fails closed.
+type FreshnessGate struct {
+	MaxAgeMs    float64
+	EpochMs     float64
+	ClockSkewMs float64
+	Now         *int64
+}
+
+func freshnessGateReason(g *FreshnessGate, fr map[string]any, now int64) string {
+	epochMs := g.EpochMs
+	if epochMs == 0 {
+		epochMs = DefaultFreshnessEpochMs
+	}
+	fnow := float64(now)
+	if g.Now != nil {
+		fnow = float64(*g.Now)
+	}
+	skew := 0.0
+	if !math.IsNaN(g.ClockSkewMs) && !math.IsInf(g.ClockSkewMs, 0) {
+		skew = math.Max(0, g.ClockSkewMs)
+	}
+	if !(epochMs > 0) || math.IsNaN(g.MaxAgeMs) || math.IsInf(g.MaxAgeMs, 0) || g.MaxAgeMs < 0 {
+		return "freshness gate misconfigured: epochMs must be > 0 and maxAgeMs >= 0 (fail closed)"
+	}
+	ref, _ := fr["beacon_ref"].(string)
+	epoch, hasEpoch := safeInt(fr["epoch"])
+	if ref == "" || !hasEpoch || epoch <= 0 {
+		return "freshness anchor is missing (empty beacon_ref or non-positive epoch stub)"
+	}
+	anchor := float64(epoch) * epochMs
+	switch {
+	case anchor > fnow+skew:
+		return "freshness anchor is in the future"
+	case fnow-anchor > g.MaxAgeMs:
+		return "freshness anchor is stale (older than " + jsNumberString(g.MaxAgeMs) + " ms)"
+	}
+	return ""
+}
+
+// VerifyPCActnCoreWith is VerifyPCActnCore with explicit options. The `intent` check runs after `counter_format` and is
 // reported iff the PCActn carries `intent` or opts.Intent is active; otherwise the verdict is the pre-M2 one.
 func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64, audience string, opts VerifyOptions) (v Verdict, err error) {
 	allowedSuites := opts.AllowedSuites
@@ -1088,6 +1205,39 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 		fail("validity", "the PCActn has expired")
 	default:
 		pass("validity")
+	}
+
+	if opts.EnforceFreshness != nil {
+		fr, _ := pcactn["freshness"].(map[string]any)
+		if why := freshnessGateReason(opts.EnforceFreshness, fr, now); why != "" {
+			fail("freshness_anchor", why)
+		} else {
+			pass("freshness_anchor")
+		}
+	}
+
+	if opts.PQPins != nil {
+		alg := "ed25519" // the reference reads `grant.alg ?? 'ed25519'`
+		if av := grant["alg"]; av != nil {
+			alg = jsValueString(av)
+		}
+		issuer, _ := grant["issuer"].(string)
+		pin, pinned := opts.PQPins[issuer] // own entries only
+		pk, pkIsStr := grant["pq_pk"].(string)
+		switch {
+		case alg == "ed25519" && pinned:
+			// a pin exists so that a quantum attacker who recovers the issuer's classical key cannot mint grants: a classical grant
+			// from a pinned issuer is refused
+			fail("pq_pin", "the grant issuer is pinned to a post-quantum key; a classical grant is refused")
+		case alg == "ed25519":
+			pass("pq_pin")
+		case pinned && pkIsStr && pin == pk:
+			pass("pq_pin")
+		case !pinned:
+			fail("pq_pin", "no server-side PQ pin for the grant issuer (suite "+alg+")")
+		default:
+			fail("pq_pin", "the grant pq_pk does not match the server-side pin")
+		}
 	}
 
 	chain, _ := pcactn["cap_chain"].([]any)
@@ -1146,6 +1296,18 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 	} else {
 		fail("plan_inclusion", "action is not a node of the committed plan")
 	}
+	switch {
+	case opts.AuthorizedPlanRoots != nil:
+		if slices.Contains(opts.AuthorizedPlanRoots, root) {
+			pass("plan_root_authorized")
+		} else {
+			fail("plan_root_authorized", "the plan root has not been authorized by the principal")
+		}
+	case opts.InsecureSkipPlanRootCheck:
+		v.NotEnforced = map[string]bool{"plan_root_authorized": true}
+	default:
+		fail("plan_root_authorized", "no authorized plan is configured for this verifier (set authorizedPlanRoots, or the explicit insecureSkipPlanRootCheck)")
+	}
 
 	v.Checks["leaf_signature"] = false
 	if len(chain) > 0 {
@@ -1167,9 +1329,9 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 	}
 
 	if c, ok := safeInt(pcactn["counter"]); ok && c >= 0 {
-		pass("counter")
+		pass("counter_format")
 	} else {
-		fail("counter", "missing or not a non-negative safe integer")
+		fail("counter_format", "missing or not a non-negative safe integer")
 	}
 
 	// Intent Layer M2: `intent` (reported iff the PCActn carries `intent` or the policy is active). With a wire-valid
@@ -1183,7 +1345,11 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 	}
 	// Intent Layer v2: schema, intent_session, layers, accumulators, facts, provenance, classes (intent_v2.go), each
 	// reported only under its condition.
-	for _, c := range decideIntentV2(pcactn, grant, opts.IntentV2, float64(now)).checks {
+	var v2 []V2CheckResult
+	v2d := decideIntentV2(pcactn, grant, opts.IntentV2, float64(now))
+	v.LegacyModelPolarity = v2d.legacy
+	for _, c := range v2d.checks {
+		v2 = append(v2, V2CheckResult{Name: c.name, OK: c.ok, Reason: c.why, HasReason: !c.ok})
 		if c.ok {
 			pass(c.name)
 		} else {
@@ -1191,6 +1357,48 @@ func VerifyPCActnCoreWith(pcactn map[string]any, grant map[string]any, now int64
 		}
 	}
 
+	// Consistency token: `fresh_at` (reported only when the PCActn carries the member, a side-carried token is read, or the policy
+	// requires one). A failure joins the folded reasons so an `escalate:` one stays an escalation.
+	if fa := decideFreshAt(pcactn, opts.FreshAt, now); fa.status != "none" {
+		v2 = append(v2, V2CheckResult{Name: "fresh_at", OK: fa.status == "pass", Reason: fa.reason, HasReason: fa.status == "fail"})
+		if fa.status == "pass" {
+			pass("fresh_at")
+		} else {
+			fail("fresh_at", fa.reason)
+		}
+	}
+
+	if opts.EnforceTaint != nil {
+		if why := taintGateReason(opts.EnforceTaint, pcactn["provenance"]); why != "" {
+			fail("taint_gate", why)
+		} else {
+			pass("taint_gate")
+		}
+	}
+
+	// An unverified proof is never silently accepted, at the core as well: this SDK has no zk verifier.
+	if _, has := pcactn["zk_compliance"]; has && !opts.zkInAuthorize {
+		fail("zk_compliance", zkNoVerifierReason)
+	}
+
+	coreFinalFault() // a fault after every core check passed is a deny (the deferred recover), never an allow
 	v.Allow = !failed
+	if failed {
+		// failed means fail() ran, so v.Reason is "<name>: <why>" (never empty)
+		v.Reasons = FoldV2Reasons([]string{v.Reason}, v2)
+	}
 	return v, nil
 }
+
+// Maturity is this SDK's PCA maturity tier (stable | production | experimental).
+const Maturity = "stable"
+
+// wireFault and chainFault run at the top of ValidateWireV2 and VerifyChainPolicy, inside their deferred recover; no-ops, test seams
+// that inject a fault where a hostile input must become a refusal, never a panic.
+var (
+	wireFault  = func() {}
+	chainFault = func() {}
+)
+
+// coreFinalFault runs after the last core check; a no-op, a test seam that injects a late fault.
+var coreFinalFault = func() {}

@@ -1476,7 +1476,7 @@ func TestMutV2UnsupportedSuite(t *testing.T) {
 
 func TestMutV2StrictClock(t *testing.T) {
 	f := newV2Fx(t)
-	v, err := VerifyPCActnCoreWith(f.p2(), deepM(t, f.grant), maxSafeInt+1, v2Aud, VerifyOptions{IntentV2: IntentV2ContextFromJSON(normalizeJSON(f.ctx))})
+	v, err := VerifyPCActnCoreWith(f.p2(), deepM(t, f.grant), maxSafeInt+1, v2Aud, VerifyOptions{InsecureSkipPlanRootCheck: true, IntentV2: IntentV2ContextFromJSON(normalizeJSON(f.ctx))})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -39,6 +39,10 @@ const (
 	taintedRank         = 2
 )
 
+// wbFault is a test seam (nil in production): it runs inside the fail-closed recover scopes of rules 16 ("world"), 17 ("prov") and 18
+// ("classes"), which no input is known to reach, so a test can pin that a panic becomes the failure result.
+var wbFault func(scope string)
+
 var taintRank = map[string]int{"trusted": 0, "first_party": 1, "tool": 2, "web": 3, "agent": 4}
 
 func isTaintLevel(v any) bool {
@@ -342,6 +346,9 @@ func decideIntentWorld(nowV any, aud, session any, action map[string]any, commit
 			d = fail("evaluation error (fail closed)")
 		}
 	}()
+	if wbFault != nil {
+		wbFault("world")
+	}
 	policy := policyV
 	if !polP {
 		policy = map[string]any{}
@@ -921,6 +928,9 @@ func decideParamProvenance(aud, session any, action map[string]any, prov any, pr
 			d = deny("evaluation error (fail closed)")
 		}
 	}()
+	if wbFault != nil {
+		wbFault("prov")
+	}
 	if pe := validateProvenancePolicyError(policyV); pe != "" {
 		return deny("policy misconfigured (fail closed): " + pe)
 	}
@@ -1369,6 +1379,9 @@ func decideClassifierDimensions(session any, action map[string]any, committedV a
 			d = fail("evaluation error (fail closed)")
 		}
 	}()
+	if wbFault != nil {
+		wbFault("classes")
+	}
 	if pe := validateClassifierPolicyError(policyV); pe != "" {
 		return fail("policy misconfigured (fail closed): " + pe)
 	}
@@ -1534,14 +1547,16 @@ func intentWBContextError(is map[string]any, artifacts any, policy any) string {
 // ---- the W-B unit (intent-env.ts decideIntentWB) ----------------------------------------------------------------
 
 type wbResult struct {
-	skip    bool
-	checks  map[string]string // pass | question | fail
-	reason  string
-	outcome string
+	singleSource []string // worlds decided by a single oracle (rule 21: their env.world.<name> is model-derived)
+	skip         bool
+	checks       map[string]string // pass | question | fail
+	reason       string
+	outcome      string
+	env          map[string]any // the predicate env members the unit computed: world, prov, class (authorize)
 }
 
 func decideIntentWB(now float64, aud string, session string, action map[string]any, is map[string]any, artifacts any, policy any) wbResult {
-	out := wbResult{checks: map[string]string{}, outcome: "admit"}
+	out := wbResult{checks: map[string]string{}, outcome: "admit", env: map[string]any{}}
 	if ce := intentWBContextError(is, artifacts, policy); ce != "" {
 		out.checks["facts"] = "fail"
 		out.reason = "facts: the W-B context is malformed: " + ce
@@ -1571,6 +1586,8 @@ func decideIntentWB(now float64, aud string, session string, action map[string]a
 			return out
 		}
 		out.checks["facts"] = "pass"
+		out.env["world"] = w.world
+		out.singleSource = w.singleSource
 	}
 	prov, provP := is["prov"]
 	labels, labelsP := is["labels"]
@@ -1588,6 +1605,7 @@ func decideIntentWB(now float64, aud string, session string, action map[string]a
 			out.outcome = "deny"
 			return out
 		}
+		out.env["prov"] = p.env
 		if p.outcome == "question" {
 			out.checks["provenance"] = "question"
 			out.outcome = "question"
@@ -1611,6 +1629,7 @@ func decideIntentWB(now float64, aud string, session string, action map[string]a
 			return out
 		}
 		out.checks["classes"] = "pass"
+		out.env["class"] = c.classes
 	}
 	return out
 }
