@@ -395,6 +395,10 @@ func sessionPinFor(pins any, signer string) (string, bool) {
 	return v, ok
 }
 
+// sessionBindSuiteFields is a test seam (identity in production): every suite that needs a PQ key was refused above when it
+// carries none, so bindSuiteFields cannot fail on a real root.
+var sessionBindSuiteFields = bindSuiteFields
+
 // verifySessionRoot: shape, signer listed, suite signature; "" when it verifies, else the reason. R3-01 (fail closed): a
 // non-ed25519 root verifies only under the VERIFIER's pin for its signer (pins = context session.pq_pins), never under
 // the root's own principals[].pq_pk (part of the presented artifact); the signer's own entry, when it declares a pq_pk,
@@ -430,7 +434,7 @@ func verifySessionRoot(sv any, pins any) string {
 	}
 	base := sessionRootBody(s)
 	base["signer"] = signer
-	bound, ok := bindSuiteFields(base, alg, algP, pq, pqP)
+	bound, ok := sessionBindSuiteFields(base, alg, algP, pq, pqP)
 	if !ok {
 		return "session root signature invalid"
 	}

@@ -1,0 +1,491 @@
+[
+ {
+  "id": "L20-stack-1-byte",
+  "line": "#define ATLAS_LESS_STACK_BYTES ((size_t)16 * 1024 * 1024)",
+  "from": "(size_t)16 * 1024 * 1024",
+  "to": "(size_t)1",
+  "what": "thread stack size 1 byte (below PTHREAD_STACK_MIN: setstacksize fails)"
+ },
+ {
+  "id": "L20-stack-8-mib",
+  "line": "#define ATLAS_LESS_STACK_BYTES ((size_t)16 * 1024 * 1024)",
+  "from": "(size_t)16 *",
+  "to": "(size_t)8 *",
+  "what": "thread stack size 8 MiB instead of 16 MiB"
+ },
+ {
+  "id": "L21-sig-min-is-max",
+  "line": "#define SIG_MIN ((size_t)LESS_SIGNATURE_SIZE(0))",
+  "from": "LESS_SIGNATURE_SIZE(0)",
+  "to": "LESS_SIGNATURE_SIZE(MAX_PUBLISHED_SEEDS)",
+  "what": "SIG_MIN defined as the maximum size"
+ },
+ {
+  "id": "L22-sig-max-is-min",
+  "line": "#define SIG_MAX ((size_t)LESS_SIGNATURE_SIZE(MAX_PUBLISHED_SEEDS))",
+  "from": "LESS_SIGNATURE_SIZE(MAX_PUBLISHED_SEEDS)",
+  "to": "LESS_SIGNATURE_SIZE(0)",
+  "what": "SIG_MAX defined as the minimum size"
+ },
+ {
+  "id": "L24-pk-bytes-accessor",
+  "line": "size_t atlas_less_cat1_public_key_bytes(void) { return (size_t)CRYPTO_PUBLICKEYBYTES; }",
+  "from": "return (size_t)CRYPTO_PUBLICKEYBYTES;",
+  "to": "return (size_t)CRYPTO_PUBLICKEYBYTES + 1;",
+  "what": "public-key size accessor off by one"
+ },
+ {
+  "id": "L25-min-accessor",
+  "line": "size_t atlas_less_cat1_signature_min_bytes(void) { return SIG_MIN; }",
+  "from": "return SIG_MIN;",
+  "to": "return SIG_MAX;",
+  "what": "signature-min accessor returns the max"
+ },
+ {
+  "id": "L26-max-accessor",
+  "line": "size_t atlas_less_cat1_signature_max_bytes(void) { return SIG_MAX; }",
+  "from": "return SIG_MAX;",
+  "to": "return SIG_MIN;",
+  "what": "signature-max accessor returns the min"
+ },
+ {
+  "id": "L43-win-create-null-return-1",
+  "line": "    if (h == NULL) return 0;",
+  "from": "return 0;",
+  "to": "return 1;",
+  "what": "CreateThread failure returns success",
+  "applicable": false,
+  "reason": "Windows branch (#if defined(_WIN32)): not compiled on the Linux CI runner, so no test can run it there"
+ },
+ {
+  "id": "L43-win-create-null-negated",
+  "line": "    if (h == NULL) return 0;",
+  "from": "h == NULL",
+  "to": "h != NULL",
+  "what": "CreateThread failure test negated",
+  "applicable": false,
+  "reason": "Windows branch (#if defined(_WIN32)): not compiled on the Linux CI runner, so no test can run it there"
+ },
+ {
+  "id": "L46-win-return-0",
+  "line": "    return 1;",
+  "from": "return 1;",
+  "to": "return 0;",
+  "what": "open_on_big_stack reports failure after a successful run",
+  "applicable": false,
+  "reason": "Windows branch (#if defined(_WIN32)): not compiled on the Linux CI runner, so no test can run it there"
+ },
+ {
+  "id": "L53-attr-init-negated",
+  "line": "    if (pthread_attr_init(&a) != 0) return 0;",
+  "from": "!= 0) return 0;",
+  "to": "== 0) return 0;",
+  "what": "pthread_attr_init success treated as failure"
+ },
+ {
+  "id": "L53-attr-init-return-1",
+  "line": "    if (pthread_attr_init(&a) != 0) return 0;",
+  "from": "return 0;",
+  "to": "return 1;",
+  "what": "pthread_attr_init failure returns success"
+ },
+ {
+  "id": "L54-setstacksize-negated",
+  "line": "    int ok = pthread_attr_setstacksize(&a, ATLAS_LESS_STACK_BYTES) == 0 && pthread_create(&t, &a, open_thread, j) == 0;",
+  "from": "ATLAS_LESS_STACK_BYTES) == 0",
+  "to": "ATLAS_LESS_STACK_BYTES) != 0",
+  "what": "pthread_attr_setstacksize success treated as failure"
+ },
+ {
+  "id": "L56-not-ok-return-1",
+  "line": "    if (!ok) return 0;",
+  "from": "return 0;",
+  "to": "return 1;",
+  "what": "thread setup/creation failure returns success"
+ },
+ {
+  "id": "L57-join-negated",
+  "line": "    return pthread_join(t, NULL) == 0;",
+  "from": "== 0;",
+  "to": "!= 0;",
+  "what": "pthread_join success treated as failure"
+ },
+ {
+  "id": "L57-join-result-ignored",
+  "line": "    return pthread_join(t, NULL) == 0;",
+  "from": "return pthread_join(t, NULL) == 0;",
+  "to": "pthread_join(t, NULL); return 1;",
+  "what": "pthread_join still waits but its result is ignored"
+ },
+ {
+  "id": "L62-pk-null-negated",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "pk == NULL",
+  "to": "pk != NULL",
+  "what": "pk NULL test negated"
+ },
+ {
+  "id": "L62-sig-null-negated",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "sig == NULL",
+  "to": "sig != NULL",
+  "what": "sig NULL test negated"
+ },
+ {
+  "id": "L62-msg-null-negated",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "msg == NULL",
+  "to": "msg != NULL",
+  "what": "msg NULL test negated"
+ },
+ {
+  "id": "L62-msg-len-nonzero-negated",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "msg_len != 0",
+  "to": "msg_len == 0",
+  "what": "NULL-message clause refuses the empty message instead of NULL with a length"
+ },
+ {
+  "id": "L62-or-1-to-and",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "pk == NULL || sig",
+  "to": "pk == NULL && sig",
+  "what": "first || swapped to &&"
+ },
+ {
+  "id": "L62-or-2-to-and",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "sig == NULL || (msg",
+  "to": "sig == NULL && (msg",
+  "what": "second || swapped to &&"
+ },
+ {
+  "id": "L62-and-to-or",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "msg == NULL && msg_len",
+  "to": "msg == NULL || msg_len",
+  "what": "&& in the NULL-message clause swapped to ||"
+ },
+ {
+  "id": "L62-drop-pk-null",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "pk == NULL ||",
+  "to": "0 ||",
+  "what": "pk NULL check dropped"
+ },
+ {
+  "id": "L62-drop-sig-null",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "sig == NULL ||",
+  "to": "0 ||",
+  "what": "sig NULL check dropped"
+ },
+ {
+  "id": "L62-drop-msg-null",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "(msg == NULL && msg_len != 0)",
+  "to": "0",
+  "what": "NULL-message-with-length check dropped"
+ },
+ {
+  "id": "L62-return-1",
+  "line": "    if (pk == NULL || sig == NULL || (msg == NULL && msg_len != 0)) return 0;",
+  "from": "return 0;",
+  "to": "return 1;",
+  "what": "NULL-pointer refusal returns success"
+ },
+ {
+  "id": "L63-pk-len-negated",
+  "line": "    if (pk_len != (size_t)CRYPTO_PUBLICKEYBYTES) return 0;",
+  "from": "pk_len !=",
+  "to": "pk_len ==",
+  "what": "public-key length test negated"
+ },
+ {
+  "id": "L63-drop-pk-len",
+  "line": "    if (pk_len != (size_t)CRYPTO_PUBLICKEYBYTES) return 0;",
+  "from": "pk_len != (size_t)CRYPTO_PUBLICKEYBYTES",
+  "to": "0",
+  "what": "public-key length check dropped"
+ },
+ {
+  "id": "L63-return-1",
+  "line": "    if (pk_len != (size_t)CRYPTO_PUBLICKEYBYTES) return 0;",
+  "from": "return 0;",
+  "to": "return 1;",
+  "what": "wrong public-key length returns success"
+ },
+ {
+  "id": "L64-min-negated",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len < SIG_MIN",
+  "to": "sig_len >= SIG_MIN",
+  "what": "lower bound negated"
+ },
+ {
+  "id": "L64-min-flipped",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len < SIG_MIN",
+  "to": "sig_len > SIG_MIN",
+  "what": "lower bound direction flipped"
+ },
+ {
+  "id": "L64-max-negated",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len > SIG_MAX",
+  "to": "sig_len <= SIG_MAX",
+  "what": "upper bound negated"
+ },
+ {
+  "id": "L64-max-flipped",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len > SIG_MAX",
+  "to": "sig_len < SIG_MAX",
+  "what": "upper bound direction flipped"
+ },
+ {
+  "id": "L64-step-negated",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "!= 0) return",
+  "to": "== 0) return",
+  "what": "seed-step test negated"
+ },
+ {
+  "id": "L64-or-1-to-and",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "SIG_MIN || sig_len",
+  "to": "SIG_MIN && sig_len",
+  "what": "first || swapped to &&"
+ },
+ {
+  "id": "L64-or-2-to-and",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "SIG_MAX || (SIG_MAX",
+  "to": "SIG_MAX && (SIG_MAX",
+  "what": "second || swapped to &&"
+ },
+ {
+  "id": "L64-drop-min",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len < SIG_MIN ||",
+  "to": "0 ||",
+  "what": "lower bound dropped"
+ },
+ {
+  "id": "L64-drop-max",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len > SIG_MAX ||",
+  "to": "0 ||",
+  "what": "upper bound dropped"
+ },
+ {
+  "id": "L64-drop-step",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "(SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0",
+  "to": "0",
+  "what": "seed-step check dropped"
+ },
+ {
+  "id": "L64-min-bound-is-max",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len < SIG_MIN",
+  "to": "sig_len < SIG_MAX",
+  "what": "lower bound compares against SIG_MAX"
+ },
+ {
+  "id": "L64-max-bound-is-min",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "sig_len > SIG_MAX",
+  "to": "sig_len > SIG_MIN",
+  "what": "upper bound compares against SIG_MIN"
+ },
+ {
+  "id": "L64-step-base-is-min",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "(SIG_MAX - sig_len)",
+  "to": "(SIG_MIN - sig_len)",
+  "what": "seed step measured from SIG_MIN"
+ },
+ {
+  "id": "L64-step-modulus-doubled",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "% SEED_LENGTH_BYTES",
+  "to": "% (2 * SEED_LENGTH_BYTES)",
+  "what": "seed step of 32 bytes instead of 16"
+ },
+ {
+  "id": "L64-return-1",
+  "line": "    if (sig_len < SIG_MIN || sig_len > SIG_MAX || (SIG_MAX - sig_len) % SEED_LENGTH_BYTES != 0) return 0;",
+  "from": "return 0;",
+  "to": "return 1;",
+  "what": "bad signature length returns success"
+ },
+ {
+  "id": "L65-overflow-negated",
+  "line": "    if (msg_len > (size_t)-1 - sig_len) return 0;",
+  "from": "msg_len >",
+  "to": "msg_len <=",
+  "what": "length-overflow test negated"
+ },
+ {
+  "id": "L65-overflow-flipped",
+  "line": "    if (msg_len > (size_t)-1 - sig_len) return 0;",
+  "from": "msg_len >",
+  "to": "msg_len <",
+  "what": "length-overflow test direction flipped"
+ },
+ {
+  "id": "L65-overflow-boundary",
+  "line": "    if (msg_len > (size_t)-1 - sig_len) return 0;",
+  "from": "msg_len >",
+  "to": "msg_len >=",
+  "what": "length-overflow test also refuses the exact boundary"
+ },
+ {
+  "id": "L65-drop-overflow",
+  "line": "    if (msg_len > (size_t)-1 - sig_len) return 0;",
+  "from": "msg_len > (size_t)-1 - sig_len",
+  "to": "0",
+  "what": "length-overflow check dropped"
+ },
+ {
+  "id": "L65-return-1",
+  "line": "    if (msg_len > (size_t)-1 - sig_len) return 0;",
+  "from": "return 0;",
+  "to": "return 1;",
+  "what": "length overflow returns success"
+ },
+ {
+  "id": "L69-valid-initially-1",
+  "line": "    int valid = 0;",
+  "from": "int valid = 0;",
+  "to": "int valid = 1;",
+  "what": "result defaults to valid (allocation failure accepts)"
+ },
+ {
+  "id": "L71-copy-guard-negated",
+  "line": "        if (msg_len) memcpy(sm, msg, msg_len);",
+  "from": "if (msg_len)",
+  "to": "if (!msg_len)",
+  "what": "message copied only when empty"
+ },
+ {
+  "id": "L71-copy-guard-dropped",
+  "line": "        if (msg_len) memcpy(sm, msg, msg_len);",
+  "from": "if (msg_len)",
+  "to": "if (1)",
+  "what": "message copy also runs for the empty message"
+ },
+ {
+  "id": "L72-sig-offset-zero",
+  "line": "        memcpy(sm + msg_len, sig, sig_len);",
+  "from": "memcpy(sm + msg_len,",
+  "to": "memcpy(sm,",
+  "what": "signature copied over the message instead of after it"
+ },
+ {
+  "id": "L73-rc-initially-0",
+  "line": "        open_job j = {pk, sm, (unsigned long long)smlen, m, 0, -1};",
+  "from": "m, 0, -1}",
+  "to": "m, 0, 0}",
+  "what": "open result defaults to success"
+ },
+ {
+  "id": "L74-open-negated",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "valid = open_on_big_stack",
+  "to": "valid = !open_on_big_stack",
+  "what": "thread result negated"
+ },
+ {
+  "id": "L74-open-dropped",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "open_on_big_stack(&j) &&",
+  "to": "1 &&",
+  "what": "verifier thread never runs"
+ },
+ {
+  "id": "L74-and-1-to-or",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "(&j) && j.rc",
+  "to": "(&j) || j.rc",
+  "what": "first && swapped to ||"
+ },
+ {
+  "id": "L74-rc-negated",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "j.rc == 0",
+  "to": "j.rc != 0",
+  "what": "reference verdict negated"
+ },
+ {
+  "id": "L74-rc-dropped",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "j.rc == 0 &&",
+  "to": "1 &&",
+  "what": "reference verdict ignored"
+ },
+ {
+  "id": "L74-and-2-to-or",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "j.rc == 0 && j.mlen",
+  "to": "j.rc == 0 || j.mlen",
+  "what": "second && swapped to ||"
+ },
+ {
+  "id": "L74-mlen-negated",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "j.mlen ==",
+  "to": "j.mlen !=",
+  "what": "opened-length test negated"
+ },
+ {
+  "id": "L74-mlen-dropped",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "j.mlen == (unsigned long long)msg_len &&",
+  "to": "1 &&",
+  "what": "opened length not compared with the caller's message length"
+ },
+ {
+  "id": "L74-and-3-to-or",
+  "line": "        valid = open_on_big_stack(&j) && j.rc == 0 && j.mlen == (unsigned long long)msg_len &&",
+  "from": "(unsigned long long)msg_len &&",
+  "to": "(unsigned long long)msg_len ||",
+  "what": "third && swapped to ||"
+ },
+ {
+  "id": "L75-empty-negated",
+  "line": "                (msg_len == 0 || memcmp(m, msg, msg_len) == 0);",
+  "from": "msg_len == 0 ||",
+  "to": "msg_len != 0 ||",
+  "what": "empty-message shortcut negated"
+ },
+ {
+  "id": "L75-or-to-and",
+  "line": "                (msg_len == 0 || memcmp(m, msg, msg_len) == 0);",
+  "from": "msg_len == 0 ||",
+  "to": "msg_len == 0 &&",
+  "what": "|| swapped to &&"
+ },
+ {
+  "id": "L75-drop-empty",
+  "line": "                (msg_len == 0 || memcmp(m, msg, msg_len) == 0);",
+  "from": "msg_len == 0 ||",
+  "to": "0 ||",
+  "what": "empty-message shortcut dropped"
+ },
+ {
+  "id": "L75-memcmp-negated",
+  "line": "                (msg_len == 0 || memcmp(m, msg, msg_len) == 0);",
+  "from": ") == 0);",
+  "to": ") != 0);",
+  "what": "message comparison negated"
+ },
+ {
+  "id": "L75-memcmp-dropped",
+  "line": "                (msg_len == 0 || memcmp(m, msg, msg_len) == 0);",
+  "from": "memcmp(m, msg, msg_len) == 0",
+  "to": "1",
+  "what": "message comparison dropped"
+ }
+]

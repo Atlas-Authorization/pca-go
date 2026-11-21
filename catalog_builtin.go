@@ -1,0 +1,51 @@
+// Code generated from the reference built-in action catalog. DO NOT EDIT.
+
+package pca
+
+// The catalog test compares every entry with the reference catalog file. Reversibility and blast are the effective values.
+
+// BuiltinActions is the default action catalog of CreateAgent and CompilePolicy.
+var BuiltinActions = []CatalogAction{
+	{Connector: "stripe", Action: "charge", Verb: "stripe.charge", Reversibility: "irreversible", BlastRadius: 0.9, AmountField: "amount",
+		Description: "Charge a customer. Refundable in practice, but a charge is treated as final.", Aliases: []string{"bill", "charge_customer"}, Traits: []string{"pca.irreversible", "pca.money_moving"}},
+	{Connector: "stripe", Action: "refund", Verb: "stripe.refund", Reversibility: "irreversible", BlastRadius: 0.9, AmountField: "amount",
+		Description: "Returns money for a charge to the customer.", Aliases: []string{"issue_refund", "refund", "refund_charge", "reimburse"}, Traits: []string{"pca.irreversible", "pca.money_moving"}},
+	{Connector: "stripe", Action: "payout", Verb: "stripe.payout", Reversibility: "irreversible", BlastRadius: 0.9, AmountField: "amount",
+		Description: "Moves funds from a Stripe balance to a bank account.", Aliases: []string{"pay_out", "payout"}, Traits: []string{"pca.irreversible", "pca.money_moving"}},
+	{Connector: "stripe", Action: "create_customer", Verb: "stripe.create_customer", Reversibility: "rate_limited", BlastRadius: 0.2, AmountField: "",
+		Description: "Creates a customer record.", Aliases: nil, Traits: []string{"pca.pii_access"}},
+	{Connector: "gmail", Action: "send", Verb: "gmail.send", Reversibility: "irreversible", BlastRadius: 0.8, AmountField: "",
+		Description: "Sends an email to people outside your organisation.", Aliases: []string{"send_email"}, Traits: []string{"pca.external_communication", "pca.irreversible", "pca.pii_access"}},
+	{Connector: "gmail", Action: "draft", Verb: "gmail.draft", Reversibility: "reversible", BlastRadius: 0.2, AmountField: "",
+		Description: "Saves an email draft without sending it.", Aliases: nil, Traits: []string{"pca.pii_access"}},
+	{Connector: "gmail", Action: "delete", Verb: "gmail.delete", Reversibility: "irreversible", BlastRadius: 0.8, AmountField: "",
+		Description: "Permanently deletes a message.", Aliases: nil, Traits: []string{"pca.destructive", "pca.irreversible"}},
+	{Connector: "github", Action: "read", Verb: "github.read", Reversibility: "reversible", BlastRadius: 0.05, AmountField: "",
+		Description: "Reads files from a repository.", Aliases: nil, Traits: []string{}},
+	{Connector: "github", Action: "create_pr", Verb: "github.create_pr", Reversibility: "irreversible", BlastRadius: 0.2, AmountField: "",
+		Description: "Opens a pull request, which is visible to everyone with access to the repository.", Aliases: nil, Traits: []string{"pca.external_communication", "pca.irreversible"}},
+	{Connector: "github", Action: "comment", Verb: "github.comment", Reversibility: "irreversible", BlastRadius: 0.2, AmountField: "",
+		Description: "Posts a comment, visible to everyone with access to the repository.", Aliases: nil, Traits: []string{"pca.external_communication", "pca.irreversible"}},
+	{Connector: "github", Action: "merge_pr", Verb: "github.merge_pr", Reversibility: "irreversible", BlastRadius: 0.5, AmountField: "",
+		Description: "Merges a pull request, which can trigger deploys and other downstream effects.", Aliases: nil, Traits: []string{"pca.irreversible"}},
+	{Connector: "github", Action: "delete_repo", Verb: "github.delete_repo", Reversibility: "irreversible", BlastRadius: 0.8, AmountField: "",
+		Description: "Deletes a repository and everything in it.", Aliases: nil, Traits: []string{"pca.destructive", "pca.irreversible"}},
+	{Connector: "slack", Action: "post_message", Verb: "slack.post_message", Reversibility: "irreversible", BlastRadius: 0.5, AmountField: "",
+		Description: "Posts a message that members of the channel can read.", Aliases: nil, Traits: []string{"pca.bulk", "pca.external_communication", "pca.irreversible"}},
+	{Connector: "slack", Action: "read", Verb: "slack.read", Reversibility: "reversible", BlastRadius: 0.05, AmountField: "",
+		Description: "Reads the message history of a channel.", Aliases: nil, Traits: []string{}},
+	{Connector: "calendar", Action: "create_event", Verb: "calendar.create_event", Reversibility: "irreversible", BlastRadius: 0.2, AmountField: "",
+		Description: "Creates an event and sends invitations to its attendees.", Aliases: nil, Traits: []string{"pca.external_communication", "pca.irreversible", "pca.pii_access"}},
+	{Connector: "calendar", Action: "delete_event", Verb: "calendar.delete_event", Reversibility: "rate_limited", BlastRadius: 0.5, AmountField: "",
+		Description: "Deletes a calendar event.", Aliases: nil, Traits: []string{"pca.destructive"}},
+	{Connector: "files", Action: "read", Verb: "files.read", Reversibility: "reversible", BlastRadius: 0.05, AmountField: "",
+		Description: "Reads files.", Aliases: nil, Traits: []string{"pca.bulk"}},
+	{Connector: "files", Action: "write", Verb: "files.write", Reversibility: "rate_limited", BlastRadius: 0.5, AmountField: "",
+		Description: "Writes or overwrites files.", Aliases: nil, Traits: []string{"pca.bulk"}},
+	{Connector: "files", Action: "delete", Verb: "files.delete", Reversibility: "irreversible", BlastRadius: 0.8, AmountField: "",
+		Description: "Deletes files.", Aliases: nil, Traits: []string{"pca.bulk", "pca.destructive", "pca.irreversible"}},
+	{Connector: "http", Action: "get", Verb: "http.get", Reversibility: "reversible", BlastRadius: 0.05, AmountField: "",
+		Description: "Fetches a URL.", Aliases: nil, Traits: []string{"pca.bulk", "pca.network_egress"}},
+	{Connector: "http", Action: "post", Verb: "http.post", Reversibility: "rate_limited", BlastRadius: 0.5, AmountField: "",
+		Description: "Posts a body to a URL.", Aliases: nil, Traits: []string{"pca.bulk", "pca.network_egress"}},
+}

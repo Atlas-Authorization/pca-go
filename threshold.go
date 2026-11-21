@@ -149,6 +149,12 @@ func thresholdT(v any) (byte, bool) {
 	return 0, false
 }
 
+// signerSetHash is SignerSetHash (a seam: after validateSignerSet it cannot fail, so the refusal below is otherwise unreachable).
+var signerSetHash = SignerSetHash
+
+// thresholdFaultHook is a test seam (nil in production) that reaches the fail-closed recover of VerifyThresholdShare.
+var thresholdFaultHook func()
+
 // VerifyThresholdShare verifies ONE threshold share `{role, t, signer_set, threshold_message, share}` (the
 // conformance `threshold_share` / `threshold_set` entry shape) the way the reference verifyThreshold counts it:
 //
@@ -158,11 +164,10 @@ func thresholdT(v any) (byte, bool) {
 // must be for the one key the set registers for role, a role registering pq_pk needs a PQ / hybrid share (R6-02),
 // and a PQ share verifies only under the set's registered pq_pk. TOTAL: false on ANY malformed input, never panics.
 func VerifyThresholdShare(entry any) (ok bool) {
-	defer func() {
-		if r := recover(); r != nil {
-			ok = false
-		}
-	}()
+	defer func() { _ = recover() }() // a fault is a refusal: ok is still false
+	if thresholdFaultHook != nil {
+		thresholdFaultHook()
+	}
 	e, isMap := entry.(map[string]any)
 	if !isMap {
 		return false
@@ -191,7 +196,7 @@ func VerifyThresholdShare(entry any) (ok bool) {
 	if !valid {
 		return false
 	}
-	ssh, hashed := SignerSetHash(signerSet)
+	ssh, hashed := signerSetHash(signerSet)
 	if !hashed {
 		return false
 	}
