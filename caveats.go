@@ -138,6 +138,13 @@ func caveatSatisfied(cv any, ctx map[string]any) (sat bool) {
 			sat = false
 		}
 	}()
+	return caveatEval(cv, ctx)
+}
+
+// caveatEval is a variable only so a test can inject a fault and reach the recover above (no input panics it).
+var caveatEval = caveatEvalImpl
+
+func caveatEvalImpl(cv any, ctx map[string]any) bool {
 	c, ok := cv.(map[string]any)
 	if !ok {
 		return false

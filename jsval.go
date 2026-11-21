@@ -16,6 +16,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -55,6 +57,31 @@ func parseJSNumberLexeme(s string) (float64, bool) {
 	return f, true
 }
 
+var (
+	jsRadixRe   = regexp.MustCompile(`^0(?:[xX][0-9a-fA-F]+|[oO][0-7]+|[bB][01]+)$`)
+	jsDecimalRe = regexp.MustCompile(`^[+-]?(?:Infinity|(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$`)
+)
+
+// jsStringToNumber is Number(s) for a string (ECMAScript StringToNumber), NaN where JS gives NaN. The grammars gate
+// strconv.ParseFloat, which also takes "inf", "nan", "1_000" and "0x1p4", and big.Int, which also takes a sign.
+func jsStringToNumber(s string) float64 {
+	t := jsTrim(s)
+	if t == "" {
+		return 0
+	}
+	if jsRadixRe.MatchString(t) {
+		base := map[byte]int{'x': 16, 'o': 8, 'b': 2}[t[1]|0x20]
+		n, _ := new(big.Int).SetString(t[2:], base)
+		f, _ := new(big.Float).SetInt(n).Float64() // nearest, ties to even; too large is +Inf
+		return f
+	}
+	if !jsDecimalRe.MatchString(t) {
+		return math.NaN()
+	}
+	f, _ := strconv.ParseFloat(t, 64) // the grammar leaves only ErrRange, where f is +-Inf as in JS
+	return f
+}
+
 // jsIsSafeInteger is Number.isSafeInteger (-0 IS a safe integer).
 func jsIsSafeInteger(v any) bool {
 	f, ok := jsNum(v)
@@ -84,7 +111,7 @@ func jsF(v any) float64 {
 }
 
 // jsNumber is the JSON value of a computed binary64.
-func jsNumber(f float64) json.Number { return json.Number(jsNumberString(f)) }
+func jsNumber(f float64) json.Number { return json.Number(jsNumberLexeme(f)) }
 
 // jsMemberString is ECMAScript String(o?.k) over a decoded JSON object (a nil / non-object o or a missing member is
 // undefined): "undefined", "null", "true" / "false", the string, Number::toString, an array joined with "," (null and
@@ -97,8 +124,13 @@ func jsMemberString(o map[string]any, k string) string {
 	return jsValueString(v)
 }
 
+// jsUndefinedValue stands for a JS undefined where a decoded JSON value is expected (JSON has no undefined, only absence).
+type jsUndefinedValue struct{}
+
 func jsValueString(v any) string {
 	switch x := v.(type) {
+	case jsUndefinedValue:
+		return "undefined"
 	case nil:
 		return "null"
 	case bool:
@@ -128,9 +160,17 @@ func jsValueString(v any) string {
 	return fmt.Sprint(v)
 }
 
-// jsNumberString is ECMAScript Number::toString(f), except that negative zero is "-0" (kept so the strict canonical
-// form refuses it, as canonicalizeStrict refuses -0; the lenient form prints it as "0").
+// jsNumberString is ECMAScript Number::toString(f): negative zero prints as "0".
 func jsNumberString(f float64) string {
+	if f == 0 {
+		return "0"
+	}
+	return jsNumberLexeme(f)
+}
+
+// jsNumberLexeme is Number::toString(f), except that negative zero is "-0": the lexeme of a JSON value built from a binary64
+// (kept so the strict canonical form refuses it, as canonicalizeStrict refuses -0; the lenient form prints it as "0").
+func jsNumberLexeme(f float64) string {
 	switch {
 	case math.IsNaN(f):
 		return "NaN"
@@ -227,6 +267,25 @@ func utf16Units(s string) []uint16 {
 		i += n
 	}
 	return out
+}
+
+// utf16String is the string of UTF-16 code units: surrogate pairs recombine and a lone surrogate stays as its 3-byte WTF-8 form (the
+// way a JavaScript string keeps it), where utf16.Decode would replace it with U+FFFD.
+func utf16String(u []uint16) string {
+	var sb strings.Builder
+	for i := 0; i < len(u); i++ {
+		c := rune(u[i])
+		switch {
+		case c >= 0xD800 && c < 0xDC00 && i+1 < len(u) && u[i+1] >= 0xDC00 && u[i+1] < 0xE000:
+			sb.WriteRune(utf16.DecodeRune(c, rune(u[i+1])))
+			i++
+		case c >= 0xD800 && c < 0xE000:
+			writeWTF8(&sb, c)
+		default:
+			sb.WriteRune(c)
+		}
+	}
+	return sb.String()
 }
 
 // jsLen is String.prototype.length (UTF-16 code units).
@@ -559,4 +618,22 @@ func hashCanonicalV(v any) (string, bool) {
 func strictBytes(v any) ([]byte, bool) {
 	b, err := canonBytes(v)
 	return b, err == nil
+}
+
+// wtfToUTF8 is what Node does when it encodes a JavaScript string as UTF-8: every lone surrogate (kept as 3-byte WTF-8 here)
+// becomes U+FFFD.
+func wtfToUTF8(s string) string {
+	if !strings.Contains(s, "\xed") {
+		return s
+	}
+	var sb strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0xED && i+2 < len(s) && s[i+1] >= 0xA0 && s[i+1] <= 0xBF {
+			sb.WriteString("�")
+			i += 2
+			continue
+		}
+		sb.WriteByte(s[i])
+	}
+	return sb.String()
 }

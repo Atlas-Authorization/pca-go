@@ -447,6 +447,9 @@ func mapOpens(kind string, e map[string]any, size int, commit string) bool {
 	return root != nil && mapCommitOf(size, root) == commit
 }
 
+// mapOpensFn is a variable only so a test can inject a fault and reach decideMapDisclosure's recover.
+var mapOpensFn = mapOpens
+
 type mapDecision struct {
 	ok     bool
 	cell   []int
@@ -494,7 +497,7 @@ func decideMapDisclosure(mapCommit any, action map[string]any, params any, param
 		kind string
 		e    map[string]any
 	}{{"header", he}, {"cell", ce}, {"metrics", me}} {
-		if !mapOpens(o.kind, o.e, size, commit) {
+		if !mapOpensFn(o.kind, o.e, size, commit) {
 			return bad("the " + o.kind + " leaf does not open the map commitment")
 		}
 	}
@@ -524,12 +527,16 @@ func decideMapDisclosure(mapCommit any, action map[string]any, params any, param
 	return mapDecision{ok: true, cell: cell, pPpm: jsF(c["p_ppm"])}
 }
 
+// mapLeafCountOK is the trust-boundary size check of a map commit: at least one leaf, at most maxMapLeaves (a DoS bound). It takes the
+// count so the boundary can be tested at exactly maxMapLeaves and maxMapLeaves+1 without building 16.7M leaves.
+func mapLeafCountOK(n int) bool { return n >= 1 && n <= maxMapLeaves }
+
 // IntentMapCommitPrimitive runs primitives.intent_map_commit on {leaves: [{kind, salt, leaf}]}: {map_commit} of the
 // full leaf list (nil result when a leaf has no hash: an unknown kind, a bad salt or a non-canonical leaf).
 func IntentMapCommitPrimitive(input any) map[string]any {
 	in, _ := normalizeJSON(input).(map[string]any)
 	leaves, ok := in["leaves"].([]any)
-	if !ok || len(leaves) == 0 || len(leaves) > maxMapLeaves {
+	if !ok || !mapLeafCountOK(len(leaves)) {
 		return map[string]any{}
 	}
 	hs := make([][]byte, 0, len(leaves))

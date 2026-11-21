@@ -117,12 +117,7 @@ func validateIntentSessionWire(v any) string {
 		if !ok || len(prov) > maxISProvPaths {
 			return "'intent_session.prov' must be an object of at most 32 entries"
 		}
-		paths := make([]string, 0, len(prov))
-		for path := range prov {
-			paths = append(paths, path)
-		}
-		sort.Strings(paths)
-		for _, path := range paths {
+		for _, path := range jsKeys(prov) { // the reference's member order (text order when parsed, else sorted)
 			if !matchParamPath(path) {
 				return "'intent_session.prov' key '" + path + "' is not action.params.<name>"
 			}
@@ -395,6 +390,10 @@ func sessionPinFor(pins any, signer string) (string, bool) {
 	return v, ok
 }
 
+// sessionBindSuiteFields is a test seam (identity in production): every suite that needs a PQ key was refused above when it
+// carries none, so bindSuiteFields cannot fail on a real root.
+var sessionBindSuiteFields = bindSuiteFields
+
 // verifySessionRoot: shape, signer listed, suite signature; "" when it verifies, else the reason. R3-01 (fail closed): a
 // non-ed25519 root verifies only under the VERIFIER's pin for its signer (pins = context session.pq_pins), never under
 // the root's own principals[].pq_pk (part of the presented artifact); the signer's own entry, when it declares a pq_pk,
@@ -430,7 +429,7 @@ func verifySessionRoot(sv any, pins any) string {
 	}
 	base := sessionRootBody(s)
 	base["signer"] = signer
-	bound, ok := bindSuiteFields(base, alg, algP, pq, pqP)
+	bound, ok := sessionBindSuiteFields(base, alg, algP, pq, pqP)
 	if !ok {
 		return "session root signature invalid"
 	}
@@ -448,15 +447,10 @@ func sessionRootDigest(s any) (string, bool) {
 
 // firstUnknownKey is closedKeys over a slice, reporting the smallest unknown key (Go maps carry no insertion order).
 func firstUnknownKey(m map[string]any, allowed []string) (string, bool) {
-	bad := []string{}
-	for k := range m {
+	for _, k := range jsKeys(m) { // Object.keys order: the first unknown member in the document's own order
 		if !contains(allowed, k) {
-			bad = append(bad, k)
+			return k, false
 		}
 	}
-	if len(bad) == 0 {
-		return "", true
-	}
-	sort.Strings(bad)
-	return bad[0], false
+	return "", true
 }

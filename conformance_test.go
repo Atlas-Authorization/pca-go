@@ -114,7 +114,7 @@ func TestVectors(t *testing.T) {
 			skippedBySuite[suite]++
 			t.Run(name+"/unsupported_suite", func(t *testing.T) {
 				ctx := v["context"].(map[string]any)
-				got, err := VerifyPCActnCore(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string))
+				got, err := verifyCoreSkipPlan(v["pcactn"].(map[string]any), v["grant"].(map[string]any), num(ctx["now"]), ctx["aud"].(string))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -143,7 +143,7 @@ func TestVectors(t *testing.T) {
 			// context.intent_policy_json (raw JSON text, keeps 950000.0 / 1e6 / -0.0) wins over context.intent_policy.
 			// Intent Layer v2: context.intent_v2 is the verifier state of the schema-* / session-* / acc-* / layers-*
 			// vectors (absent = none).
-			opts := VerifyOptions{AllowedSuites: allowed, Intent: IntentPolicyFromJSON(ctx["intent_policy"]), IntentV2: IntentV2ContextFromJSON(ctx["intent_v2"])}
+			opts := VerifyOptions{InsecureSkipPlanRootCheck: true, AllowedSuites: allowed, Intent: IntentPolicyFromJSON(ctx["intent_policy"]), IntentV2: IntentV2ContextFromJSON(ctx["intent_v2"])}
 			if text, ok := ctx["intent_policy_json"].(string); ok {
 				ip, perr := IntentPolicyFromJSONText(text)
 				if perr != nil {

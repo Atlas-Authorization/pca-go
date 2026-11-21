@@ -1,6 +1,10 @@
 //go:build less && cgo
 
 /* The patched LESS reference C (lessc/, a copy of sdks/pca-less-c) compiled into package pca for the `less` build; see less_cgo.go. */
+/* one translation unit: windows.h must precede every LESS header (they define N, K, T and W as macros) */
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 #include "lessc/lib/codes.c"
 #include "lessc/lib/fips202.c"
 /* fips202.c and keccakf1600.c each define ROL and NROUNDS for their own code; separate them as separate units would be. */

@@ -151,7 +151,7 @@ func TestK042PredJsNumbersMatchJavaScript(t *testing.T) {
 			t.Errorf("%s: jsNum %v want %v", c.Raw, f, d)
 		}
 		if c.Finite {
-			if got := jsNumberString(d); got != c.Js {
+			if got := jsNumberLexeme(d); got != c.Js {
 				t.Errorf("%s: jsNumberString %q want %q", c.Raw, got, c.Js)
 			}
 			if nv, _ := normalizeJSON(n).(json.Number); string(nv) != c.Js {

@@ -1,0 +1,46 @@
+name: Groth16 (libpcazk)
+
+# zkkit: Groth16 verification and proving for snarkjs / circom artifacts through cgo over libpcazk (arkworks, built here from the
+# flagship crate), replaying the verification cases of the shared reference corpus on BN254 and BLS12-381, directly and through
+# the core's zk compliance functions (VerifyPolicyVmProof, the SNARK backends, the verifier hook). The cgo module is separate so
+# the core stays cgo-free; the core's backend seam and its own replay of the whole corpus run without a library in the main workflow.
+on:
+  push:
+    branches: [main, 'ci/**']
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source layout (full shared corpus and the Groth16 crate from the flagship)
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: The backend seam and the zk compliance module without a library (pure Go; the whole reference corpus, the pairing answered by its recorded verdicts)
+        working-directory: ${{ env.PCA_MONO_SDK }}
+        run: go test -count=1 -run 'TestGroth16BackendSeam|TestZk' .
+      - name: libpcazk (cargo build --features capi)
+        run: echo "ATLAS_PCA_LIBPCAZK=$(.github/scripts/build-libpcazk.sh "$RUNNER_TEMP/pcazk" "$RUNNER_TEMP/mono/packages/pca-zk/crate" | tail -1)" >> "$GITHUB_ENV"
+      - name: The vendored header matches the crate's
+        run: diff "$ATLAS_PCA_LIBPCAZK/pca_zk.h" "$PCA_MONO_SDK/zkkit/pca_zk.h"
+      - name: Corpus replay (both curves, reference-compatible and strict), refusals, the core seam and the core's zk compliance functions with the real backend
+        working-directory: ${{ env.PCA_MONO_SDK }}/zkkit
+        env:
+          CGO_LDFLAGS: -L${{ env.ATLAS_PCA_LIBPCAZK }}
+          LD_LIBRARY_PATH: ${{ env.ATLAS_PCA_LIBPCAZK }}
+        run: |
+          go mod tidy -e
+          go test -count=1 ./...

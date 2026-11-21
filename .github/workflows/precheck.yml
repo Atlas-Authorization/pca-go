@@ -1,0 +1,70 @@
+name: Precheck
+
+# Compile-only gate, go vet plus a test-binary compile (no test runs) for the root module and every separate module.
+# Runs only on pre/** pushes (and by hand): it builds and typechecks everything, tests included, and runs no test.
+# Push pre/<version> first and the full ci/** run only when this is green.
+on:
+  push:
+    branches: ['pre/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  precheck:
+    name: compile everything (tests included, none run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Flagship checkout
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh
+      - name: Root module (default tags, then the less and goal-kernel build tags)
+        run: |
+          go build ./...
+          go vet ./...
+          go test -run XXX_NONE -count=1 ./...
+          go vet -tags less ./...
+          go test -run XXX_NONE -count=1 -tags less ./...
+          if find goalkernel/internal/gen -name '*.go' 2>/dev/null | grep -q .; then
+            go vet -tags pcagoalkernel ./...
+            go test -run XXX_NONE -count=1 -tags pcagoalkernel ./...
+          fi
+      # the pure-Go adapter modules: each has its own go.mod that replaces the library with this checkout
+      - name: Adapter modules (build, vet, test binaries compiled)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mod in adakit adkgo anthropic blstkit echo eino genkit gin langchaingo openai sigstore sqltest; do
+            [ -f "$mod/go.mod" ] || { echo "skip (absent in this tree): $mod"; continue; }
+            echo "::group::$mod"
+            (cd "$mod" && go mod tidy -e && go build ./... && go vet ./... && go test -run XXX_NONE -count=1 ./...)
+            echo "::endgroup::"
+          done
+      - name: Example module
+        run: cd examples/gin-server && go mod tidy -e && go build ./... && go vet ./...
+      # the opt-in cgo kits link a native library that only their own workflows build: here they are vetted (cgo preprocessing and
+      # type-check of the sources and the tests, no link), which needs only the committed headers
+      - name: Source layout for the kits (full shared corpus from the flagship)
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - name: Native-library kits (vet only, no link)
+        shell: bash
+        working-directory: ${{ env.PCA_MONO_SDK }}
+        run: |
+          set -euo pipefail
+          for mod in sealkit fndsakit lweotkit lweotkit/party zkkit wasmhost wasmhostbin; do
+            [ -f "$mod/go.mod" ] || { echo "skip (absent in this tree): $mod"; continue; }
+            echo "::group::$mod"
+            (cd "$mod" && go mod tidy -e && go vet ./...)
+            echo "::endgroup::"
+          done

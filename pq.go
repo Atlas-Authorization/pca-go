@@ -18,8 +18,9 @@ package pca
 //                                                `less` tag and cgo: the patched reference C of sdks/pca-less-c through cgo
 //                                                (less_cgo.go); the LESS signature is variable-length (1,153..1,329 bytes
 //                                                in steps of 16). A pure-Go build refuses both as unsupported.
-// The remaining registered suites (fn-dsa-512 / fn-dsa-1024: no FIPS 206 implementation in Go worth trusting; LESS in a
-// pure-Go build) are REFUSED with the distinct reason `unsupported_suite: <alg>` (never a silent bad signature). An `alg`
+//   - "fn-dsa-512" / "fn-dsa-1024"               pure PQ, raw FN-DSA `sig` under `pq_pk`, ONLY while a backend is registered through
+//                                                SetFalconBackend (the real one is the cgo module fndsakit; FIPS 206 is unfinal).
+// The remaining registered suites (fn-dsa-* with no backend registered; LESS in a pure-Go build) are REFUSED with the distinct reason `unsupported_suite: <alg>` (never a silent bad signature). An `alg`
 // that is not registered at all keeps the plain "unknown signature alg" refusal.
 //
 // `alg` and `pq_pk` are SIGNED (part of the canonical body); `sig` and `pq_sig` are the signatures and are
@@ -69,7 +70,7 @@ var RegisteredSuites = []string{
 func SupportedSuites() []string {
 	out := make([]string, 0, len(sigSuites))
 	for _, a := range RegisteredSuites {
-		if _, ok := sigSuites[a]; ok {
+		if _, ok := resolveSigAlg(a, true); ok {
 			out = append(out, a)
 		}
 	}
@@ -103,6 +104,8 @@ const (
 	pqSlh128f
 	pqSlh256s
 	pqLessCat1
+	pqFnDsa512
+	pqFnDsa1024
 )
 
 // lens returns the (public key, signature) byte lengths of a PQ primitive.
@@ -118,6 +121,10 @@ func (p pqPrim) lens() (int, int) {
 		return slh256sPublicKeyBytes, slh256sSignatureBytes
 	case pqLessCat1:
 		return lessPublicKeyBytes, lessSignatureMaxBytes
+	case pqFnDsa512:
+		return FnDsa512PublicKeyBytes, FnDsa512SignatureBytes
+	case pqFnDsa1024:
+		return FnDsa1024PublicKeyBytes, FnDsa1024SignatureBytes
 	}
 	return 0, 0
 }
@@ -174,6 +181,13 @@ var sigSuites = map[string]sigSuite{
 	"hybrid-ed25519-slh-dsa-sha2-256s": hybridSuite("hybrid-ed25519-slh-dsa-sha2-256s", pqSlh256s, false),
 }
 
+// fnDsaCoreSuites are the pure FN-DSA suites: raw FN-DSA `sig` under `pq_pk`, no pq_sig. They resolve ONLY while an FN-DSA backend is
+// registered (SetFalconBackend); with none they stay registered-but-unimplemented (unsupported_suite / deny), never accepted.
+var fnDsaCoreSuites = map[string]sigSuite{
+	"fn-dsa-512":  pureSuite("fn-dsa-512", pqFnDsa512),
+	"fn-dsa-1024": pureSuite("fn-dsa-1024", pqFnDsa1024),
+}
+
 // resolveSigAlg resolves the suite for a PCActn `alg` value. `present` is false when the field is absent
 // (=> default ed25519). Returns (suite, true) for the default or an IMPLEMENTED suite; (_, false) fails closed
 // (callers that report a reason distinguish a registered-but-unimplemented suite with isRegisteredSuite).
@@ -186,6 +200,9 @@ func resolveSigAlg(alg any, present bool) (sigSuite, bool) {
 		return sigSuite{}, false
 	}
 	su, known := sigSuites[s]
+	if !known && fnDsaBackendRegistered() {
+		su, known = fnDsaCoreSuites[s]
+	}
 	return su, known
 }
 
@@ -271,6 +288,13 @@ func pqVerifyRaw(p pqPrim, pk, msg, sig []byte) bool {
 		return slhdsa.Verify(&k, slhdsa.NewMessage(msg), sig, nil)
 	case pqLessCat1:
 		return lessCat1Verify != nil && lessCat1Verify(pk, msg, sig)
+	case pqFnDsa512, pqFnDsa1024:
+		variant := "fn-dsa-512"
+		if p == pqFnDsa1024 {
+			variant = "fn-dsa-1024"
+		}
+		ok, err := FnDsaVerify(variant, pk, msg, sig) // lengths already checked; a backend error is a deny
+		return err == nil && ok
 	}
 	return false
 }
@@ -397,4 +421,11 @@ func verifyLeafSuite(alg any, algPresent bool, holder string, key pqVerifyKey, m
 		pqMsg = append(append(make([]byte, 0, len(msg)+len(edSig)), msg...), edSig...)
 	}
 	return pqVerifyB64u(suite.pq, key, pqMsg, pqSigStr)
+}
+
+// VerifyPqSuiteRaw is the raw suite seam for a PURE PQ suite: `sig` under `pk` over msg through the same dispatch the leaf uses
+// (false for an unknown, unimplemented or hybrid suite, e.g. fn-dsa-* with no backend registered).
+func VerifyPqSuiteRaw(alg string, pk, msg, sig []byte) bool {
+	su, ok := resolveSigAlg(alg, true)
+	return ok && !su.hasEd25519 && su.needsPqPk && pqVerifyRaw(su.pq, pk, msg, sig)
 }
