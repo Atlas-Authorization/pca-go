@@ -1,0 +1,88 @@
+package pca
+
+// complianceControlMappings is the table of control mappings: each control names the evidence the records must carry.
+func complianceControlMappings() []any {
+	return []any{
+		map[string]any{
+			"framework":      "eu-ai-act",
+			"controlId":      "eu-ai-act:art-12",
+			"controlTitle":   "Record-keeping — automatic, traceable logging of events",
+			"clause":         "EU AI Act, Article 12",
+			"requirement":    "High-risk AI systems must automatically record events (\"logs\") over their lifetime, enabling traceability of the system's functioning.",
+			"pcaEvidence":    "Every action is a signed PCActn; each log entry CITES its proof (the PCActn digest + the verifying leaf signature), so the record is tamper-evident and cannot be back-dated or fabricated.",
+			"evidenceFields": []any{"evidence.pcactnDigest", "evidence.leafSignature", "evidence.cryptographicallyVerifiable", "timestamps.issuedAt"},
+		},
+		map[string]any{
+			"framework":      "eu-ai-act",
+			"controlId":      "eu-ai-act:art-50",
+			"controlTitle":   "Transparency — disclosure of automated decisions and the acting agent",
+			"clause":         "EU AI Act, Article 50",
+			"requirement":    "Providers/deployers must ensure natural persons are informed that they are interacting with / affected by an AI system; interactions and automated decisions must be disclosed.",
+			"pcaEvidence":    "Each entry discloses the acting AGENT identity (leaf holder), the PRINCIPAL it acts for (root issuer), the exact action, and the automated decision outcome + reason — a complete, attributable disclosure per action.",
+			"evidenceFields": []any{"agent.holder", "agent.principal", "action.summary", "decision.outcome", "decision.reason"},
+		},
+		map[string]any{
+			"framework":      "iso-42001",
+			"controlId":      "iso-42001:A.6.2.8",
+			"controlTitle":   "Reasoning trace — AI system event logging",
+			"clause":         "ISO/IEC 42001 Annex A.6.2.8 (AI system event logs / recording)",
+			"requirement":    "The organization shall record events produced by the AI system so that its decisions can be examined and explained after the fact.",
+			"pcaEvidence":    "Each entry carries the Policy-VM decision with its decisive reason, the risk score r, the required tier and the trust-budget state — a complete, machine-checked reasoning trace, not a free-text note.",
+			"evidenceFields": []any{"decision.reason", "risk.r", "risk.tier", "risk.budget", "decision.checks"},
+		},
+		map[string]any{
+			"framework":      "iso-42001",
+			"controlId":      "iso-42001:A.9.2",
+			"controlTitle":   "Delegation & authorization chain",
+			"clause":         "ISO/IEC 42001 Annex A.9.2 (authorization / responsible use of AI systems)",
+			"requirement":    "Use of the AI system must be authorized; the authority under which an automated action is taken must be identifiable and bounded.",
+			"pcaEvidence":    "The delegation chain is EXPLICIT: each hop records issuer → holder and the scope (caveats) it narrowed, rooted at the principal — authority is attenuated and provable, never ambient.",
+			"evidenceFields": []any{"delegation.hops", "delegation.depth", "agent.principal", "delegation.hops[].scope"},
+		},
+		map[string]any{
+			"framework":      "iso-42001",
+			"controlId":      "iso-42001:A.9.3",
+			"controlTitle":   "Human oversight of AI systems",
+			"clause":         "ISO/IEC 42001 Annex A.9.3 (human oversight)",
+			"requirement":    "Mechanisms for human oversight of the AI system must exist and be exercised for higher-impact decisions.",
+			"pcaEvidence":    "Human oversight is a SIGNED CO-SIGNATURE: a step-up is approved by a principal threshold share naming the human approver (cryptographic, not a free-text \"approved by\"); denials and step-up requirements show the oversight boundary being enforced.",
+			"evidenceFields": []any{"humanOverride.humanApproved", "humanOverride.approvers", "decision.outcome", "risk.tier"},
+		},
+		map[string]any{
+			"framework":      "iso-42001",
+			"controlId":      "iso-42001:A.6.2.2",
+			"controlTitle":   "Intended use — action bound to a committed plan",
+			"clause":         "ISO/IEC 42001 Annex A.6.2.2 (AI system requirements / intended purpose)",
+			"requirement":    "The AI system must operate within its intended purpose; actions outside the specified scope must be prevented.",
+			"pcaEvidence":    "Every action proves inclusion in a committed plan (the signed plan root): an off-plan action fails verification. The plan root in each entry binds the action to its intended, pre-committed purpose.",
+			"evidenceFields": []any{"evidence.planRoot", "action.verb", "action.resource", "decision.checks"},
+		},
+		map[string]any{
+			"framework":      "soc2",
+			"controlId":      "soc2:CC6.1",
+			"controlTitle":   "Logical access security — least privilege",
+			"clause":         "SOC 2 CC6.1",
+			"requirement":    "The entity implements logical access controls to protect against unauthorized access, enforcing least privilege.",
+			"pcaEvidence":    "Access is deny-by-default: actions are constrained by signed predicates and capability attenuation. Denied entries evidence the control actively refusing out-of-scope access.",
+			"evidenceFields": []any{"decision.outcome", "delegation.hops[].scope", "decision.checks", "evidence.cryptographicallyVerifiable"},
+		},
+		map[string]any{
+			"framework":      "soc2",
+			"controlId":      "soc2:CC6.2",
+			"controlTitle":   "Registration & authorization of credentials / identities",
+			"clause":         "SOC 2 CC6.2",
+			"requirement":    "Prior to issuing access, the entity registers and authorizes new identities; access is traceable to an authorizing principal.",
+			"pcaEvidence":    "Each agent identity (leaf holder) is bound into a delegation chain rooted at an authorizing principal, with every hop signed — access is always traceable to who authorized it.",
+			"evidenceFields": []any{"agent.principal", "agent.holder", "delegation.hops", "evidence.grantRef"},
+		},
+		map[string]any{
+			"framework":      "soc2",
+			"controlId":      "soc2:CC6.3",
+			"controlTitle":   "Access modification & removal (attenuation / revocation)",
+			"clause":         "SOC 2 CC6.3",
+			"requirement":    "The entity modifies and removes access based on roles/need; access rights are narrowed or withdrawn appropriately.",
+			"pcaEvidence":    "Delegation is append-only attenuation: a child hop can only narrow scope, never widen it. Narrowing caveats per hop (and denied actions) evidence access being bounded and withdrawn.",
+			"evidenceFields": []any{"delegation.hops[].scope", "delegation.hops[].budgetAlloc", "decision.outcome"},
+		},
+	}
+}

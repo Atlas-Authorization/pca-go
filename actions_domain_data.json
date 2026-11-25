@@ -1,0 +1,1366 @@
+{
+ "domain": [
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "stripe.read_charge",
+   "aliases": [
+    "read_charge",
+    "view_charge"
+   ],
+   "title": "Read a charge",
+   "effects": [
+    "read"
+   ],
+   "resource": {
+    "type": "stripe.charge",
+    "id": {
+     "prefix": "ch_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "charge": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.stripe.charge"
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 50000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "stripe.transfer",
+   "aliases": [
+    "transfer",
+    "send_money"
+   ],
+   "title": "Transfer funds to an account",
+   "effects": [
+    "pay"
+   ],
+   "resource": {
+    "type": "stripe.account",
+    "id": {
+     "prefix": "acct_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "amount": {
+     "type": "integer",
+     "role": "money.amount",
+     "min": 1,
+     "max": 10000000000,
+     "unit": {
+      "kind": "money",
+      "ccy": "USD",
+      "exp": 2
+     }
+    },
+    "account": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.stripe.account"
+    },
+    "idempotency_key": {
+     "type": "string",
+     "max_len": 128
+    }
+   },
+   "reversibility": "irreversible",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 900000
+   },
+   "idempotency": {
+    "mode": "key_param",
+    "param": "idempotency_key"
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "stripe.cancel_subscription",
+   "aliases": [
+    "cancel_subscription",
+    "cancel_plan"
+   ],
+   "title": "Cancel a subscription",
+   "effects": [
+    "update"
+   ],
+   "resource": {
+    "type": "stripe.subscription",
+    "id": {
+     "prefix": "sub_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "subscription": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.stripe.subscription"
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 200000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "mail.read_thread",
+   "aliases": [
+    "read_thread",
+    "open",
+    "read"
+   ],
+   "title": "Read a mail thread",
+   "effects": [
+    "read"
+   ],
+   "resource": {
+    "type": "mail.thread",
+    "id": {
+     "prefix": "th_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "thread": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.mail.thread"
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 50000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "mail.label",
+   "aliases": [
+    "label",
+    "tag"
+   ],
+   "title": "Label a mail thread",
+   "effects": [
+    "update"
+   ],
+   "resource": {
+    "type": "mail.thread",
+    "id": {
+     "prefix": "th_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "thread": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.mail.thread"
+    },
+    "label": {
+     "type": "string",
+     "values": [
+      "important",
+      "follow_up",
+      "receipts",
+      "newsletters",
+      "later"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 200000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "mail.archive",
+   "aliases": [
+    "archive",
+    "file_away"
+   ],
+   "title": "Archive a mail thread",
+   "effects": [
+    "update"
+   ],
+   "resource": {
+    "type": "mail.thread",
+    "id": {
+     "prefix": "th_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "thread": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.mail.thread"
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 200000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "mail.delete",
+   "aliases": [
+    "delete",
+    "trash",
+    "remove"
+   ],
+   "title": "Permanently delete a mail thread",
+   "effects": [
+    "delete"
+   ],
+   "resource": {
+    "type": "mail.thread",
+    "id": {
+     "prefix": "th_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "thread": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.mail.thread"
+    }
+   },
+   "reversibility": "irreversible",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 800000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "mail.send",
+   "aliases": [
+    "send",
+    "reply",
+    "respond"
+   ],
+   "title": "Send a mail message",
+   "effects": [
+    "send"
+   ],
+   "resource": {
+    "type": "mail.thread",
+    "id": {
+     "prefix": "th_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "thread": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.mail.thread"
+    },
+    "to_domain": {
+     "type": "string",
+     "max_len": 253
+    },
+    "idempotency_key": {
+     "type": "string",
+     "max_len": 128
+    }
+   },
+   "reversibility": "rate_limited",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 800000
+   },
+   "idempotency": {
+    "mode": "key_param",
+    "param": "idempotency_key"
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "mail.forward",
+   "aliases": [
+    "forward"
+   ],
+   "title": "Forward a mail message",
+   "effects": [
+    "send"
+   ],
+   "resource": {
+    "type": "mail.thread",
+    "id": {
+     "prefix": "th_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "thread": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.mail.thread"
+    },
+    "to_domain": {
+     "type": "string",
+     "max_len": 253
+    },
+    "idempotency_key": {
+     "type": "string",
+     "max_len": 128
+    }
+   },
+   "reversibility": "rate_limited",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 800000
+   },
+   "idempotency": {
+    "mode": "key_param",
+    "param": "idempotency_key"
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "repo.read",
+   "aliases": [
+    "read_repo",
+    "clone",
+    "fetch"
+   ],
+   "title": "Read a repository",
+   "effects": [
+    "read"
+   ],
+   "resource": {
+    "type": "repo.repo",
+    "id": {
+     "prefix": "repo_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "repo": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.repo.repo"
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 50000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "repo.create_branch",
+   "aliases": [
+    "create_branch",
+    "open_branch"
+   ],
+   "title": "Create a branch",
+   "effects": [
+    "create"
+   ],
+   "resource": {
+    "type": "repo.repo",
+    "id": {
+     "prefix": "repo_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "repo": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.repo.repo"
+    },
+    "branch": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.ref"
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 200000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "repo.push",
+   "aliases": [
+    "push",
+    "commit_and_push"
+   ],
+   "title": "Push commits to a branch",
+   "effects": [
+    "update"
+   ],
+   "resource": {
+    "type": "repo.repo",
+    "id": {
+     "prefix": "repo_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "repo": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.repo.repo"
+    },
+    "branch": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.ref"
+    },
+    "protected": {
+     "type": "string",
+     "values": [
+      "yes",
+      "no"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 200000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "repo.merge",
+   "aliases": [
+    "merge"
+   ],
+   "title": "Merge a branch",
+   "effects": [
+    "update"
+   ],
+   "resource": {
+    "type": "repo.repo",
+    "id": {
+     "prefix": "repo_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "repo": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.repo.repo"
+    },
+    "branch": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.ref"
+    },
+    "protected": {
+     "type": "string",
+     "values": [
+      "yes",
+      "no"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "irreversible",
+   "blast": {
+    "radius": "bounded",
+    "ppm": 500000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "repo.release",
+   "aliases": [
+    "release",
+    "publish",
+    "ship"
+   ],
+   "title": "Publish a release",
+   "effects": [
+    "publish"
+   ],
+   "resource": {
+    "type": "repo.repo",
+    "id": {
+     "prefix": "repo_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "repo": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.repo.repo"
+    }
+   },
+   "reversibility": "rate_limited",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 800000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "repo.delete_branch",
+   "aliases": [
+    "delete_branch",
+    "remove_branch"
+   ],
+   "title": "Delete a branch",
+   "effects": [
+    "delete"
+   ],
+   "resource": {
+    "type": "repo.repo",
+    "id": {
+     "prefix": "repo_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "repo": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.repo.repo"
+    },
+    "branch": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.ref"
+    },
+    "protected": {
+     "type": "string",
+     "values": [
+      "yes",
+      "no"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "irreversible",
+   "blast": {
+    "radius": "bounded",
+    "ppm": 500000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "data.query",
+   "aliases": [
+    "query",
+    "select",
+    "read_rows"
+   ],
+   "title": "Query a dataset",
+   "effects": [
+    "read"
+   ],
+   "resource": {
+    "type": "data.dataset",
+    "id": {
+     "prefix": "ds_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "dataset": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.data.dataset"
+    },
+    "column_class": {
+     "type": "string",
+     "values": [
+      "public",
+      "internal",
+      "pii"
+     ],
+     "max_len": 32
+    },
+    "rows": {
+     "type": "integer",
+     "min": 0,
+     "max": 1000000000,
+     "unit": {
+      "kind": "count"
+     }
+    },
+    "purpose": {
+     "type": "string",
+     "values": [
+      "analytics",
+      "support",
+      "research",
+      "marketing"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 50000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "data.export",
+   "aliases": [
+    "export",
+    "download",
+    "dump"
+   ],
+   "title": "Export a dataset",
+   "effects": [
+    "export"
+   ],
+   "resource": {
+    "type": "data.dataset",
+    "id": {
+     "prefix": "ds_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "dataset": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.data.dataset"
+    },
+    "column_class": {
+     "type": "string",
+     "values": [
+      "public",
+      "internal",
+      "pii"
+     ],
+     "max_len": 32
+    },
+    "rows": {
+     "type": "integer",
+     "min": 0,
+     "max": 1000000000,
+     "unit": {
+      "kind": "count"
+     }
+    },
+    "purpose": {
+     "type": "string",
+     "values": [
+      "analytics",
+      "support",
+      "research",
+      "marketing"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "rate_limited",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 800000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "data.delete_dataset",
+   "aliases": [
+    "delete_dataset",
+    "drop",
+    "purge"
+   ],
+   "title": "Delete a dataset",
+   "effects": [
+    "delete"
+   ],
+   "resource": {
+    "type": "data.dataset",
+    "id": {
+     "prefix": "ds_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "dataset": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.data.dataset"
+    }
+   },
+   "reversibility": "irreversible",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 800000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "travel.search",
+   "aliases": [
+    "search",
+    "find_flights",
+    "look_up"
+   ],
+   "title": "Search trips",
+   "effects": [
+    "read"
+   ],
+   "resource": {
+    "type": "travel.trip",
+    "id": {
+     "prefix": "trip_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "destination": {
+     "type": "string",
+     "values": [
+      "SFO",
+      "LAX",
+      "JFK",
+      "LHR",
+      "CDG",
+      "NRT",
+      "AUS",
+      "SEA"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 50000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "travel.hold",
+   "aliases": [
+    "hold",
+    "reserve"
+   ],
+   "title": "Hold a trip",
+   "effects": [
+    "create"
+   ],
+   "resource": {
+    "type": "travel.trip",
+    "id": {
+     "prefix": "trip_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "price": {
+     "type": "integer",
+     "role": "money.amount",
+     "min": 1,
+     "max": 10000000000,
+     "unit": {
+      "kind": "money",
+      "ccy": "USD",
+      "exp": 2
+     }
+    },
+    "destination": {
+     "type": "string",
+     "values": [
+      "SFO",
+      "LAX",
+      "JFK",
+      "LHR",
+      "CDG",
+      "NRT",
+      "AUS",
+      "SEA"
+     ],
+     "max_len": 32
+    }
+   },
+   "reversibility": "reversible",
+   "blast": {
+    "radius": "one",
+    "ppm": 200000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "travel.book",
+   "aliases": [
+    "book",
+    "purchase",
+    "buy_ticket"
+   ],
+   "title": "Book a trip",
+   "effects": [
+    "pay"
+   ],
+   "resource": {
+    "type": "travel.trip",
+    "id": {
+     "prefix": "trip_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "price": {
+     "type": "integer",
+     "role": "money.amount",
+     "min": 1,
+     "max": 10000000000,
+     "unit": {
+      "kind": "money",
+      "ccy": "USD",
+      "exp": 2
+     }
+    },
+    "destination": {
+     "type": "string",
+     "values": [
+      "SFO",
+      "LAX",
+      "JFK",
+      "LHR",
+      "CDG",
+      "NRT",
+      "AUS",
+      "SEA"
+     ],
+     "max_len": 32
+    },
+    "depart": {
+     "type": "datetime"
+    },
+    "idempotency_key": {
+     "type": "string",
+     "max_len": 128
+    }
+   },
+   "reversibility": "irreversible",
+   "blast": {
+    "radius": "tenant",
+    "ppm": 900000
+   },
+   "idempotency": {
+    "mode": "key_param",
+    "param": "idempotency_key"
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  },
+  {
+   "v": 1,
+   "kind": "pca-action-def",
+   "verb": "travel.cancel_booking",
+   "aliases": [
+    "cancel_booking",
+    "cancel_flight"
+   ],
+   "title": "Cancel a booking",
+   "effects": [
+    "delete"
+   ],
+   "resource": {
+    "type": "travel.booking",
+    "id": {
+     "prefix": "bk_",
+     "class": "any_safe",
+     "len": [
+      4,
+      64
+     ]
+    },
+    "scope": "one"
+   },
+   "params": {
+    "booking": {
+     "type": "string",
+     "max_len": 128,
+     "role": "id.travel.booking"
+    }
+   },
+   "reversibility": "irreversible",
+   "blast": {
+    "radius": "bounded",
+    "ppm": 500000
+   },
+   "review": {
+    "state": "authored"
+   },
+   "since": "0.5.0"
+  }
+ ],
+ "domainVerbs": {
+  "payments": [
+   {
+    "id": "read_charge",
+    "verb": "stripe.read_charge",
+    "resourceType": "charge",
+    "params": {}
+   },
+   {
+    "id": "refund",
+    "verb": "stripe.refund",
+    "resourceType": "charge",
+    "params": {
+     "amount": "amount"
+    },
+    "ccys": [
+     "USD",
+     "EUR",
+     "GBP",
+     "JPY"
+    ]
+   },
+   {
+    "id": "charge_customer",
+    "verb": "stripe.charge",
+    "resourceType": "customer",
+    "params": {
+     "amount": "amount"
+    },
+    "ccys": [
+     "USD",
+     "EUR",
+     "GBP",
+     "JPY"
+    ]
+   },
+   {
+    "id": "transfer",
+    "verb": "stripe.transfer",
+    "resourceType": "account",
+    "params": {
+     "amount": "amount"
+    },
+    "ccys": [
+     "USD",
+     "EUR",
+     "GBP",
+     "JPY"
+    ]
+   },
+   {
+    "id": "payout",
+    "verb": "stripe.payout",
+    "resourceType": "account",
+    "params": {
+     "amount": "amount"
+    },
+    "ccys": [
+     "USD",
+     "EUR",
+     "GBP",
+     "JPY"
+    ]
+   },
+   {
+    "id": "cancel_subscription",
+    "verb": "stripe.cancel_subscription",
+    "resourceType": "subscription",
+    "params": {}
+   }
+  ],
+  "email": [
+   {
+    "id": "read_thread",
+    "verb": "mail.read_thread",
+    "resourceType": "thread",
+    "params": {}
+   },
+   {
+    "id": "label",
+    "verb": "mail.label",
+    "resourceType": "thread",
+    "params": {
+     "label": "label"
+    }
+   },
+   {
+    "id": "archive",
+    "verb": "mail.archive",
+    "resourceType": "thread",
+    "params": {}
+   },
+   {
+    "id": "delete",
+    "verb": "mail.delete",
+    "resourceType": "thread",
+    "params": {}
+   },
+   {
+    "id": "send",
+    "verb": "mail.send",
+    "resourceType": "thread",
+    "params": {
+     "to_domain": "to_domain"
+    }
+   },
+   {
+    "id": "forward",
+    "verb": "mail.forward",
+    "resourceType": "thread",
+    "params": {
+     "to_domain": "to_domain"
+    }
+   }
+  ],
+  "code_repos": [
+   {
+    "id": "read_repo",
+    "verb": "repo.read",
+    "resourceType": "repo",
+    "params": {}
+   },
+   {
+    "id": "create_branch",
+    "verb": "repo.create_branch",
+    "resourceType": "repo",
+    "params": {
+     "branch": "branch"
+    }
+   },
+   {
+    "id": "push",
+    "verb": "repo.push",
+    "resourceType": "repo",
+    "params": {
+     "branch": "branch",
+     "protected": "protected"
+    }
+   },
+   {
+    "id": "merge",
+    "verb": "repo.merge",
+    "resourceType": "repo",
+    "params": {
+     "branch": "branch",
+     "protected": "protected"
+    }
+   },
+   {
+    "id": "release",
+    "verb": "repo.release",
+    "resourceType": "repo",
+    "params": {}
+   },
+   {
+    "id": "delete_branch",
+    "verb": "repo.delete_branch",
+    "resourceType": "repo",
+    "params": {
+     "branch": "branch",
+     "protected": "protected"
+    }
+   }
+  ],
+  "data_access": [
+   {
+    "id": "query",
+    "verb": "data.query",
+    "resourceType": "dataset",
+    "params": {
+     "column_class": "column_class",
+     "rows": "rows",
+     "purpose": "purpose"
+    }
+   },
+   {
+    "id": "export",
+    "verb": "data.export",
+    "resourceType": "dataset",
+    "params": {
+     "column_class": "column_class",
+     "rows": "rows",
+     "purpose": "purpose"
+    }
+   },
+   {
+    "id": "delete_dataset",
+    "verb": "data.delete_dataset",
+    "resourceType": "dataset",
+    "params": {}
+   }
+  ],
+  "calendar_travel": [
+   {
+    "id": "search",
+    "verb": "travel.search",
+    "resourceType": "trip",
+    "params": {
+     "destination": "destination"
+    }
+   },
+   {
+    "id": "hold",
+    "verb": "travel.hold",
+    "resourceType": "trip",
+    "params": {
+     "price": "price",
+     "destination": "destination"
+    },
+    "ccys": [
+     "USD",
+     "EUR",
+     "GBP",
+     "JPY"
+    ]
+   },
+   {
+    "id": "book",
+    "verb": "travel.book",
+    "resourceType": "trip",
+    "params": {
+     "price": "price",
+     "destination": "destination",
+     "depart": "depart"
+    },
+    "ccys": [
+     "USD",
+     "EUR",
+     "GBP",
+     "JPY"
+    ]
+   },
+   {
+    "id": "cancel_booking",
+    "verb": "travel.cancel_booking",
+    "resourceType": "booking",
+    "params": {}
+   }
+  ]
+ }
+}

@@ -38,3 +38,22 @@ func cgoLessCat1Verify(pk, msg, sig []byte) bool {
 	return C.atlas_less_cat1_verify((*C.uint8_t)(unsafe.Pointer(&pk[0])), C.size_t(len(pk)), m, C.size_t(len(msg)),
 		(*C.uint8_t)(unsafe.Pointer(&sig[0])), C.size_t(len(sig))) == 1
 }
+
+// lessCat1VerifyRaw calls the C wrapper with no Go-side checks; it exists only for the wrapper's own tests (less_wrapper_test.go).
+func lessCat1VerifyRaw(pk unsafe.Pointer, pkLen uint64, msg unsafe.Pointer, msgLen uint64, sig unsafe.Pointer, sigLen uint64) bool {
+	return C.atlas_less_cat1_verify((*C.uint8_t)(pk), C.size_t(pkLen), (*C.uint8_t)(msg), C.size_t(msgLen), (*C.uint8_t)(sig),
+		C.size_t(sigLen)) == 1
+}
+
+// lessCat1VerifyRawErrno is lessCat1VerifyRaw plus the C errno after the call (cgo clears it first); for the wrapper's own tests.
+func lessCat1VerifyRawErrno(pk unsafe.Pointer, pkLen uint64, msg unsafe.Pointer, msgLen uint64, sig unsafe.Pointer, sigLen uint64) (bool, error) {
+	r, err := C.atlas_less_cat1_verify((*C.uint8_t)(pk), C.size_t(pkLen), (*C.uint8_t)(msg), C.size_t(msgLen), (*C.uint8_t)(sig),
+		C.size_t(sigLen))
+	return r == 1, err
+}
+
+// lessCat1Sizes returns the C size accessors (public key, signature min, signature max); for the wrapper's own tests.
+func lessCat1Sizes() (pk, sigMin, sigMax uint64) {
+	return uint64(C.atlas_less_cat1_public_key_bytes()), uint64(C.atlas_less_cat1_signature_min_bytes()),
+		uint64(C.atlas_less_cat1_signature_max_bytes())
+}
