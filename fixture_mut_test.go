@@ -202,7 +202,7 @@ func (f *fx) norm() map[string]any { return deepM(f.t, f.p) }
 
 func (f *fx) verify(allowed []string) Verdict {
 	f.t.Helper()
-	v, err := VerifyPCActnCorePolicy(f.norm(), f.grant, f.now, f.aud, allowed)
+	v, err := verifyCorePolicySkipPlan(f.norm(), f.grant, f.now, f.aud, allowed)
 	if err != nil {
 		f.t.Fatal(err)
 	}

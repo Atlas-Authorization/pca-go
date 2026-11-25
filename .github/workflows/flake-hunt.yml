@@ -1,0 +1,44 @@
+name: Flake hunt
+
+# Diagnostic, dispatch only: runs the whole unit suite many times under the mutation job's limits (4 GiB address space, -tags less)
+# and lists every test that ever fails, with a count. A mutant that no test should kill (an equivalent one) is sometimes "killed"
+# by a flaky test; this finds that test.
+on:
+  push:
+    branches: ['ci/0.5.0-flake']
+  workflow_dispatch:
+    inputs:
+      count:
+        description: 'iterations per job'
+        default: '20'
+
+permissions:
+  contents: read
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        job: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run the suite repeatedly
+        shell: bash
+        run: |
+          ulimit -v 4194304
+          : > fails.txt
+          for i in $(seq 1 "${{ inputs.count || 20 }}"); do
+            go test -count=1 -tags less . 2>&1 | grep -E -- '^(--- FAIL|panic:|fatal error|FAIL)|_test.go:[0-9]+:' >> fails.txt || true
+          done
+          echo "== failing lines over ${{ inputs.count || 20 }} iterations"
+          sort fails.txt | uniq -c | sort -rn | head -60
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fails-${{ matrix.job }}
+          path: fails.txt

@@ -91,8 +91,11 @@ func TestJSNumberStringMatchesEcmaScript(t *testing.T) {
 	if jsNumberString(math.NaN()) == "" {
 		t.Error("NaN")
 	}
-	if got := jsNumberString(math.Copysign(0, -1)); got != "-0" {
+	if got := jsNumberLexeme(math.Copysign(0, -1)); got != "-0" {
 		t.Errorf("negative zero keeps its sign in the strict spelling, got %q", got)
+	}
+	if got := jsNumberString(math.Copysign(0, -1)); got != "0" {
+		t.Errorf("String(-0) is 0, got %q", got)
 	}
 	for _, lex := range []string{"Infinity", "-Infinity"} {
 		f, ok := parseJSNumberLexeme(lex)

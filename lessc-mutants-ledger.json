@@ -1,0 +1,42 @@
+[
+ {
+  "id": "L20-stack-8-mib",
+  "reason": "Equivalent, measured by the mutation run itself: the mutant runs every LESS verify of TestLessKnownAnswers and TestLessWrapper* on an 8 MiB thread, and the gate accepts this ledger entry only if that run ends as survived (no crash, no failure). Expected from the frames: LESS_verify's largest locals are Gs[8] generator matrices of 126 x 256 bytes (256 KiB), near the 0.4 MB the header documents, and pthread_attr_setstacksize accepts 8 MiB."
+ },
+ {
+  "id": "L53-attr-init-return-1",
+  "reason": "Equivalent for every input: when pthread_attr_init fails no thread is created, so run_open never writes j.rc, which keeps its initial -1 (line 73); line 74 then gives valid = 1 && (-1 == 0) = 0, the same 0 as the original. (glibc's pthread_attr_init also never fails.)"
+ },
+ {
+  "id": "L56-not-ok-return-1",
+  "reason": "Equivalent for every input: ok is 0 only when setstacksize failed (pthread_create then not called, short-circuit) or pthread_create failed; in both cases no thread ran, j.rc keeps its initial -1 (line 73) and line 74 gives valid = 1 && (-1 == 0) = 0, the same as the original."
+ },
+ {
+  "id": "L57-join-result-ignored",
+  "reason": "Equivalent for every input: the mutant still joins (it only ignores the result). pthread_join fails only with EDEADLK (joining itself or a join cycle), EINVAL (thread not joinable or already being joined) or ESRCH (no such thread); t was created joinable by this call (default attr), is joined exactly once here by its creator, so none can occur and the result is always 0, i.e. the original returns 1 too."
+ },
+ {
+  "id": "L64-step-base-is-min",
+  "reason": "Equivalent for every input: size_t arithmetic is modulo 2^64, and 2^64 and SIG_MAX - SIG_MIN = 176 are both multiples of 16, so (SIG_MIN - sig_len) and (SIG_MAX - sig_len) are congruent mod 16 for every sig_len (including sig_len > SIG_MIN, where the subtraction wraps); the % 16 test gives the same answer."
+ },
+ {
+  "id": "L71-copy-guard-dropped",
+  "reason": "Equivalent for every input: the guard differs only when msg_len == 0, where the mutant calls memcpy(sm, msg, 0) with msg NULL (less_cgo.go:32-35); a zero-length memcpy copies nothing and glibc reads no source byte, so sm is unchanged. (The guard exists for C-standard hygiene, not behaviour.)"
+ },
+ {
+  "id": "L73-rc-initially-0",
+  "reason": "Equivalent for every input: j.rc is read (line 74) only after open_on_big_stack returned nonzero, which on POSIX requires pthread_create == 0 and pthread_join == 0, i.e. open_thread ran run_open to completion and assigned j.rc = crypto_sign_open(...) (line 37), overwriting the initial value."
+ },
+ {
+  "id": "L75-memcmp-dropped",
+  "reason": "When line 75 is evaluated, j.rc == 0 and j.mlen == msg_len (line 74 short-circuits otherwise). crypto_sign_open then did *mlen = smlen - sig_len and memcpy(m, sm, *mlen) (lessc/lib/sign.c:106-107) before LESS_verify, which only reads m; sm[0..msg_len) is msg (line 71). So m[0..msg_len) == msg and memcmp(m, msg, msg_len) == 0 for every such input; for msg_len == 0 it is memcmp(m, NULL, 0), which compares nothing and returns 0 in glibc. Replacing the comparison with 1 gives the same value. The copy is lessc/lib/sign.c:106-107: `*mlen = smlen - (unsigned long long)sig_len;` then `memcpy((unsigned char *) m, (const unsigned char *) sm, (size_t) *mlen);`, and LESS_verify receives m as `const char *const`. Caveat: with an empty message Go passes msg = NULL, and memcmp(m, NULL, 0) is undefined behaviour in ISO C before C2y; glibc compares nothing and returns 0, and this gate runs on glibc only."
+ },
+ {
+  "id": "L75-empty-negated",
+  "reason": "When line 75 is evaluated, j.rc == 0 and j.mlen == msg_len (line 74 short-circuits otherwise). crypto_sign_open then did *mlen = smlen - sig_len and memcpy(m, sm, *mlen) (lessc/lib/sign.c:106-107) before LESS_verify, which only reads m; sm[0..msg_len) is msg (line 71). So m[0..msg_len) == msg and memcmp(m, msg, msg_len) == 0 for every such input; for msg_len == 0 it is memcmp(m, NULL, 0), which compares nothing and returns 0 in glibc. Both (msg_len == 0 || memcmp == 0) and (msg_len != 0 || memcmp == 0) are therefore 1. The copy is lessc/lib/sign.c:106-107: `*mlen = smlen - (unsigned long long)sig_len;` then `memcpy((unsigned char *) m, (const unsigned char *) sm, (size_t) *mlen);`, and LESS_verify receives m as `const char *const`. Caveat: with an empty message Go passes msg = NULL, and memcmp(m, NULL, 0) is undefined behaviour in ISO C before C2y; glibc compares nothing and returns 0, and this gate runs on glibc only."
+ },
+ {
+  "id": "L75-drop-empty",
+  "reason": "When line 75 is evaluated, j.rc == 0 and j.mlen == msg_len (line 74 short-circuits otherwise). crypto_sign_open then did *mlen = smlen - sig_len and memcpy(m, sm, *mlen) (lessc/lib/sign.c:106-107) before LESS_verify, which only reads m; sm[0..msg_len) is msg (line 71). So m[0..msg_len) == msg and memcmp(m, msg, msg_len) == 0 for every such input; for msg_len == 0 it is memcmp(m, NULL, 0), which compares nothing and returns 0 in glibc. Both (msg_len == 0 || memcmp == 0) and (0 || memcmp == 0) are therefore 1. The copy is lessc/lib/sign.c:106-107: `*mlen = smlen - (unsigned long long)sig_len;` then `memcpy((unsigned char *) m, (const unsigned char *) sm, (size_t) *mlen);`, and LESS_verify receives m as `const char *const`. Caveat: with an empty message Go passes msg = NULL, and memcmp(m, NULL, 0) is undefined behaviour in ISO C before C2y; glibc compares nothing and returns 0, and this gate runs on glibc only."
+ }
+]

@@ -311,7 +311,7 @@ func TestMutPqLeaf(t *testing.T) {
 		} else {
 			f.p["pq_sig"] = b64.EncodeToString(sg)
 		}
-		if v = f.verify(nil); v.Allow || v.Checks["leaf_signature"] || v.Reason != "leaf_signature: signature does not verify under the leaf holder key" {
+		if v = f.verify(nil); v.Allow || v.Checks["leaf_signature"] || v.Reason != "leaf_signature: signature does not verify under the leaf holder key / suite" {
 			t.Fatalf("%s tampered pq sig: %+v", alg, v)
 		}
 		// leaf cap that commits nothing

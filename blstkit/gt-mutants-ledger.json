@@ -1,0 +1,10 @@
+[
+  {
+    "id": "gt-bytes",
+    "reason": "GT_BYTES only sizes array parameters (byte out[GT_BYTES]), which C adjusts to plain pointers: no bound, copy or loop in gt.c uses it (the encoders loop over 12 coordinates of 48 bytes), and the Go side checks the 576-byte length itself, so the macro value changes no behaviour."
+  },
+  {
+    "id": "pairing-flag-or",
+    "reason": "the compression-flag check is redundant defence in depth: blst_p1_uncompress and blst_p2_uncompress (the next statements) return BLST_BAD_ENCODING for any input whose top bit is clear (blst e1.c/e2.c, 'if ((in0 & 0x80) == 0) return BLST_BAD_ENCODING'), so a point without the flag is refused in either slot whether the check is || or &&."
+  }
+]

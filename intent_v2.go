@@ -89,6 +89,14 @@ type v2Check struct {
 
 type v2Decision struct {
 	checks []v2Check
+	// env is the predicate env the checks computed (canon, acc, mon, world, prov, class), read by Authorize (TS v2Env)
+	env map[string]any
+	// schema is the action schema the action was checked against (when `schema` passed)
+	schema any
+	// singleSource lists the worlds decided by a single oracle (their env.world.<name> is model-derived, rule 21)
+	singleSource []string
+	// legacy: rule 21's compatibility mode is in effect and a grant reads a model-derived path (reported degraded)
+	legacy bool
 }
 
 type v2Fail string
@@ -134,9 +142,12 @@ func intentV2ContextError(c *IntentV2Context) string {
 		// closed member sets; every flag a JSON boolean and every number a safe integer when present (absent = default)
 		pm := pol.(map[string]any)
 		for k := range pm {
-			if k != "session" && k != "schema" && k != "acc" && k != "map" {
+			if k != "session" && k != "schema" && k != "acc" && k != "map" && k != "model_polarity" {
 				return "policy: unknown member '" + k + "'"
 			}
+		}
+		if mp, has := pm["model_polarity"]; has && mp != "strict" && mp != "legacy" {
+			return "policy.model_polarity must be 'strict' or 'legacy'"
 		}
 		ps, psP := pm["session"]
 		if !optObj(ps, psP) {
@@ -211,8 +222,34 @@ func intentV2ContextError(c *IntentV2Context) string {
 			}
 		}
 	}
+	if v, has := ctx["reviewers"]; has {
+		r, ok := v.(map[string]any)
+		if _, isArr := r["keys"].([]any); !ok || !isArr {
+			return "reviewers must be {keys: [...]}"
+		}
+	}
+	if v, has := ctx["call_context"]; has {
+		l, ok := v.([]any)
+		if _, strs := strsOf(l); !ok || !strs {
+			return "call_context must be an array of strings"
+		}
+	}
+	if v, has := ctx["actions"]; has {
+		ac, ok := v.(map[string]any)
+		if !ok {
+			return "actions must be an object"
+		}
+		for _, k := range []string{"records", "keys", "reapprovals"} {
+			if x, xp := ac[k]; !optArr(x, xp) {
+				return "actions." + k + " must be an array"
+			}
+		}
+	}
 	if v, has := ctx["params"]; !optObj(v, has) {
 		return "params must be an object"
+	}
+	if v, has := ctx["env"]; !optObj(v, has) {
+		return "env must be an object"
 	}
 	for _, k := range []string{"schema", "session", "acc"} {
 		if v, has := ctx[k]; !optObj(v, has) {
@@ -370,6 +407,21 @@ func accCtxError(c *IntentV2Context) string {
 	return ""
 }
 
+// modelRules reads the schema through these vars only so a test can reach its fail-closed checks: a verified doc has no null
+// verb entry, and schemaStep returns a doc or a why, never both. Production values are schemaStep and schemaVerbOf.
+var (
+	v2SchemaStep   = schemaStep
+	v2SchemaVerbOf = schemaVerbOf
+)
+
+// v2CanonProjection and v2DecideTighten are canonProjection and DecideTighten; vars only so a test can reach the fail-closed
+// branches their callers keep: a projection failure (params that hash strictly canonical always project) and a refusal
+// that names no reason (DecideTighten always names one).
+var (
+	v2CanonProjection = canonProjection
+	v2DecideTighten   = DecideTighten
+)
+
 // schemaStep is rule 14; returns the matched schema document on success.
 func schemaStep(p map[string]any, ctx *IntentV2Context) (doc any, why string) {
 	if ce := schemaCtxError(ctx); ce != "" {
@@ -405,6 +457,13 @@ func schemaStep(p map[string]any, ctx *IntentV2Context) (doc any, why string) {
 	if doc.(map[string]any)["aud"] != p["aud"] {
 		return nil, "schema aud does not match the PCActn aud"
 	}
+	if schemaIsV2(doc) {
+		// rule 22, integrity half: the document's materialized floors and traits are recomputed, never trusted
+		reviewers, _ := ctx.get("reviewers")
+		if fe := schemaFloorError(doc.(map[string]any), reviewers); fe != "" {
+			return nil, "schema_floor_forged: " + fe
+		}
+	}
 	paramsV, _ := ctx.get("params")
 	params, ok := paramsV.(map[string]any)
 	if !ok {
@@ -423,6 +482,19 @@ func schemaStep(p map[string]any, ctx *IntentV2Context) (doc any, why string) {
 		return nil, "schema_violation: " + c.Code + ": " + why
 	}
 	return doc, ""
+}
+
+func listOrEmpty(v any) []any {
+	l, _ := v.([]any)
+	if l == nil {
+		return []any{}
+	}
+	return l
+}
+
+func schemaIsV2(doc any) bool {
+	m, _ := doc.(map[string]any)
+	return jsStrictEq(m["v"], jsNumber(2))
 }
 
 // boundRoot: the bound, verified session root (shared by rules 13 and 15).
@@ -859,7 +931,7 @@ func decideLayerCeilings(layers any, actx map[string]any) string {
 
 // decideIntentV2 runs the v2 checks in order (never panics: a panic fails the check being evaluated).
 func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) v2Decision {
-	out := v2Decision{}
+	out := v2Decision{env: map[string]any{}}
 	_, present := p["intent_session"]
 	if ce := intentV2ContextError(ctx); ce != "" {
 		// a malformed verifier context fails closed: every v2 check that could be reported fails with the reason
@@ -903,11 +975,13 @@ func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) 
 				return why
 			}
 			params, _ := ctx.get("params")
-			c, ok := canonProjection(doc, verb, params.(map[string]any))
+			c, ok := v2CanonProjection(doc, verb, params.(map[string]any))
 			if !ok {
 				panic(v2Fail("canonical projection"))
 			}
 			canon = c
+			out.schema = doc
+			out.env["canon"] = c
 			return ""
 		})
 	}
@@ -935,10 +1009,14 @@ func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) 
 		if mapActive {
 			run("map", func() string { return mapStep(p, ctx) })
 		}
+		modelRules(&out, p, grant, ctx, run, actx["action"].(map[string]any))
 		return out
 	}
 	run("accumulators", func() string {
-		_, why := accStep(p, ctx, now)
+		env, why := accStep(p, ctx, now)
+		for k, v := range env {
+			out.env[k] = v
+		}
 		return why
 	})
 	if mapActive {
@@ -961,6 +1039,16 @@ func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) 
 		aud, _ := p["aud"].(string)
 		wb = decideIntentWB(now, aud, is["session"].(string), actx["action"].(map[string]any), is, artifacts, policy)
 	}()
+	if !wb.skip && len(wb.singleSource) > 0 {
+		out.singleSource = append([]string{}, wb.singleSource...)
+	}
+	if !wb.skip && wb.outcome != "deny" {
+		for _, k := range []string{"world", "prov", "class"} {
+			if v, has := wb.env[k]; has && v != nil {
+				out.env[k] = v
+			}
+		}
+	}
 	if !wb.skip {
 		for _, name := range []string{"facts", "provenance", "classes"} {
 			c, has := wb.checks[name]
@@ -977,7 +1065,212 @@ func decideIntentV2(p, grant map[string]any, ctx *IntentV2Context, now float64) 
 			}
 		}
 	}
+	modelRules(&out, p, grant, ctx, run, actx["action"].(map[string]any))
 	return out
+}
+
+// allowSidePredicates: the predicate lists a model-derived path could widen: the grant's allow-list and the ceilings (V5
+// layers).
+func allowSidePredicates(env map[string]any, ctx *IntentV2Context) []any {
+	lists := []any{env["predicates"]}
+	lv, _ := ctx.get("layers")
+	if lm, ok := lv.(map[string]any); ok {
+		for _, k := range []string{"org", "site", "std"} {
+			var l any
+			if e, ok := lm[k].(map[string]any); ok {
+				l = e["predicates"]
+			}
+			lists = append(lists, l)
+		}
+	}
+	return lists
+}
+
+// modelRules is rules 20 and 21 (intent-v2.ts modelRules), evaluated last so the verifier-computed env is complete. Both read
+// the signed ENVELOPE of the stored grant:
+//
+//	units (20): reported iff envelope.units is present.
+//	tighten (21): reported iff envelope.tighten or a model_polarity (envelope or policy) is present, or a grant-side where
+//	reads a model-derived env path (so that case is refused, never silently skipped).
+//
+// A PCActn with none of these verifies byte-identically to a verifier without the two rules.
+func modelRules(out *v2Decision, p, grant map[string]any, ctx *IntentV2Context, run func(string, func() string) bool, action map[string]any) {
+	env := ReadEnvelope(grant)
+	preds := allowSidePredicates(env, ctx)
+	verb, _ := action["verb"].(string)
+	// memoised on success only: a panicking schema step (the reference's throw) runs again
+	var memoDoc any
+	var memoWhy string
+	memoSet := false
+	schemaFor := func() (any, string) {
+		if !memoSet {
+			memoDoc, memoWhy = out.schema, ""
+			if out.schema == nil {
+				memoDoc, memoWhy = v2SchemaStep(p, ctx)
+			}
+			memoSet = true
+		}
+		return memoDoc, memoWhy
+	}
+	pinV, hasPin := env["actions"]
+	if hasPin {
+		run("pin", func() string {
+			doc, why := schemaFor()
+			if why != "" {
+				return why
+			}
+			records, _ := ctx.get("actions", "records")
+			keys, _ := ctx.get("actions", "keys")
+			reapprovals, _ := ctx.get("actions", "reapprovals")
+			d := decidePin(map[string]any{"pin": pinV, "doc": doc, "verb": verb, "records": listOrEmpty(records), "keys": listOrEmpty(keys),
+				"reapprovals": listOrEmpty(reapprovals), "grant": map[string]any{"id": grant["id"], "issuer": grant["issuer"]}})
+			if d["ok"] == true {
+				return ""
+			}
+			reason := jsValueString(d["code"]) + ": " + jsValueString(d["reason"])
+			if d["escalate"] == true {
+				reason = "escalate: " + reason
+			}
+			if n, has := d["needs_reapproval"]; has {
+				reason += " (re-approve diff " + jsValueString(n) + ")"
+			}
+			return reason
+		})
+	}
+	v2Traits := schemaIsV2(out.schema)
+	if !v2Traits && hasPin {
+		doc, _ := schemaFor()
+		v2Traits = schemaIsV2(doc)
+	}
+	if v2Traits {
+		run("traits", func() string {
+			doc, why := schemaFor()
+			if why != "" {
+				return why
+			}
+			g := map[string]any{"max_esc": jsNumber(maxEscTier), "preauth_esc": jsNumber(0)}
+			caveats := []any{}
+			if cs, _ := env["caveats"].([]any); cs != nil {
+				for _, c := range cs {
+					m, _ := c.(map[string]any)
+					caveats = append(caveats, m["type"])
+				}
+			}
+			if hasPin && actionPinError(pinV) == "" {
+				pin := pinV.(map[string]any)
+				if pc, _ := pin["caveats"].([]any); pc != nil {
+					caveats = append(caveats, pc...)
+				}
+				for _, k := range []string{"max_esc", "preauth_esc"} {
+					if x, has := pin[k]; has {
+						g[k] = x
+					}
+				}
+			}
+			g["caveats"] = caveats
+			callContext, _ := ctx.get("call_context")
+			switch rule22Decide(doc.(map[string]any), verb, g, listOrEmpty(callContext)) {
+			case "allow":
+				return ""
+			case "escalate":
+				return "escalate: the action floors need a caveat, context or confirmation the grant does not provide (rule 22)"
+			}
+			return "the action floors exceed what the grant authorizes (rule 22)"
+		})
+	}
+	if units, has := env["units"]; env != nil && has {
+		run("units", func() string {
+			doc, why := schemaFor()
+			if why != "" {
+				return why
+			}
+			v, throws := v2SchemaVerbOf(doc, verb)
+			if throws {
+				panic(v2Fail("Cannot read properties of null (reading 'verb')"))
+			}
+			in := map[string]any{"units": units, "verb": verb, "predicates": preds}
+			if dm, ok := doc.(map[string]any); ok {
+				if su, has := dm["units"]; has {
+					in["schema_units"] = su
+				}
+			}
+			if vp, has := v["params"]; v != nil && has {
+				in["verb_params"] = vp
+			}
+			if ok, reason := DecideUnits(in); !ok {
+				return reason
+			}
+			return ""
+		})
+	}
+	var polarity any
+	hasPol := false
+	polCtx, polCtxP := ctx.get("policy", "model_polarity")
+	switch {
+	case polCtxP && polCtx == "strict":
+	case polCtxP:
+		polarity, hasPol = polCtx, true
+	case env != nil:
+		polarity, hasPol = env["model_polarity"], false
+		if _, has := env["model_polarity"]; has {
+			hasPol = true
+		}
+	}
+	_, hasTighten := env["tighten"]
+	if (env != nil && hasTighten) || hasPol || polCtxP || len(ModelPathsRead(preds, out.singleSource)) > 0 {
+		run("tighten", func() string {
+			merged := map[string]any{}
+			if hv, ok := ctxEnvOf(ctx); ok {
+				for k, x := range hv {
+					merged[k] = x
+				}
+			}
+			for k, x := range out.env {
+				merged[k] = x
+			}
+			single := make([]any, len(out.singleSource))
+			for i, s := range out.singleSource {
+				single[i] = s
+			}
+			in := map[string]any{"predicates": preds, "single_source": single, "context": map[string]any{"action": action, "env": merged}}
+			if env != nil && hasTighten {
+				in["tighten"] = env["tighten"]
+			}
+			if hasPol {
+				in["polarity"] = polarity
+			}
+			r := v2DecideTighten(in)
+			if r.Legacy {
+				out.legacy = true
+			}
+			switch {
+			case r.Outcome == "ok":
+				return ""
+			case r.Reason == "":
+				return "refused"
+			}
+			return r.Reason
+		})
+	}
+}
+
+// ctxEnvOf is the host-supplied env members of the v2 context (`env`), when present.
+func ctxEnvOf(ctx *IntentV2Context) (map[string]any, bool) {
+	v, has := ctx.get("env")
+	m, ok := v.(map[string]any)
+	return m, has && ok
+}
+
+// needsModelRules: the grant's envelope carries units / tighten / model_polarity / actions, or a grant-side where reads a model-derived
+// path. Authorize then builds the v2 context (plaintext params, host env) even when the host configured none.
+func needsModelRules(grant map[string]any) bool {
+	env := ReadEnvelope(grant) // nil reads as empty: no member, and ModelPathsRead skips a nil list
+	for _, k := range []string{"units", "tighten", "model_polarity", "actions"} {
+		if _, has := env[k]; has {
+			return true
+		}
+	}
+	return len(ModelPathsRead([]any{env["predicates"]}, nil)) > 0
 }
 
 const intentGoalV2cPrefix = "pca-intent:v2c:"

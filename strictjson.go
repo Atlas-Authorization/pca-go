@@ -31,6 +31,21 @@ func StrictParse(text string) (any, error) { return parseJSON(text, true) }
 // use on untrusted input.
 func ParseJSONLenient(data []byte) (any, error) { return parseJSON(string(data), false) }
 
+// ParseJSONLastWins is JSON.parse of an untrusted text: the lenient grammar, but a repeated member is kept once (its first
+// position, its last value) instead of refused, like the reference's parser.
+func ParseJSONLastWins(data []byte) (any, error) {
+	p := &jparser{s: string(data), lastWins: true}
+	v, err := p.value(1)
+	if err != nil {
+		return nil, err
+	}
+	p.ws()
+	if p.i < len(p.s) {
+		return nil, p.err("trailing characters after the JSON value")
+	}
+	return v, nil
+}
+
 // ParseJSON strictly parses a JSON object (kept for API compatibility).
 func ParseJSON(data []byte) (map[string]any, error) {
 	v, err := StrictParse(string(data))
@@ -45,20 +60,36 @@ func ParseJSON(data []byte) (map[string]any, error) {
 }
 
 type jparser struct {
-	s      string
-	i      int
-	strict bool
+	s        string
+	i        int
+	strict   bool
+	lastWins bool
 }
 
-func (p *jparser) err(m string) error { return fmt.Errorf("strict JSON: %s (at offset %d)", m, p.i) }
+func (p *jparser) err(m string) error { return &StrictJsonError{Message: m, Offset: p.i} }
+
+// StrictJsonError is a strict-profile parse failure: the reason and the offset (in the input) it was found at.
+type StrictJsonError struct {
+	Message string
+	Offset  int
+	// whole is the full text when the failure has no offset of its own (size and encoding refusals).
+	whole string
+}
+
+func (e *StrictJsonError) Error() string {
+	if e.whole != "" {
+		return e.whole
+	}
+	return fmt.Sprintf("strict JSON: %s (at offset %d)", e.Message, e.Offset)
+}
 
 func parseJSON(text string, strict bool) (any, error) {
 	if strict {
 		if !utf8.ValidString(text) {
-			return nil, fmt.Errorf("strict JSON: invalid UTF-8")
+			return nil, &StrictJsonError{Message: "invalid UTF-8", whole: "strict JSON: invalid UTF-8"}
 		}
 		if len(text) > MaxJSONChars {
-			return nil, fmt.Errorf("strict JSON: input too large")
+			return nil, &StrictJsonError{Message: "input too large", whole: "strict JSON: input too large"}
 		}
 	}
 	p := &jparser{s: text, strict: strict}
@@ -246,6 +277,9 @@ func (p *jparser) number() (any, error) {
 
 // numberLexemeError returns "" when lex is in the canonical wire-number form.
 func numberLexemeError(lex string) string {
+	if lex == "Infinity" || lex == "-Infinity" || lex == "NaN" {
+		return "non-finite number"
+	}
 	if strings.ContainsAny(lex, "eE") {
 		return "exponent form is not allowed (use a plain decimal)"
 	}
@@ -292,6 +326,7 @@ func (p *jparser) value(depth int) (any, error) {
 		}
 		p.i++
 		o := map[string]any{}
+		var keys []string
 		p.ws()
 		if p.i < len(p.s) && p.s[p.i] == '}' {
 			p.i++
@@ -306,7 +341,8 @@ func (p *jparser) value(depth int) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			if _, dup := o[k]; dup {
+			_, dup := o[k]
+			if dup && !p.lastWins {
 				return nil, p.err("duplicate key")
 			}
 			p.ws()
@@ -319,6 +355,9 @@ func (p *jparser) value(depth int) (any, error) {
 				return nil, err
 			}
 			o[k] = v
+			if !dup {
+				keys = append(keys, k)
+			}
 			p.ws()
 			if p.i < len(p.s) && p.s[p.i] == ',' {
 				p.i++
@@ -326,6 +365,7 @@ func (p *jparser) value(depth int) (any, error) {
 			}
 			if p.i < len(p.s) && p.s[p.i] == '}' {
 				p.i++
+				recordKeyOrder(o, keys)
 				return o, nil
 			}
 			return nil, p.err(`expected "," or "}"`)

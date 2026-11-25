@@ -12,6 +12,7 @@ import (
 
 const (
 	intentGoalPrefix       = "pca-intent:v1:"
+	intentGoalV3Prefix     = "pca-intent:v3:"
 	intentGoalCommitDomain = "atlas-pca/goal/v1\x00"
 	ppmOne                 = 1_000_000
 	// MaxIntentGoalSaltLen is the UTF-8 byte cap of `intent.goal_salt`.
@@ -32,10 +33,45 @@ type IntentPolicy struct {
 	MinFidelityPpm *float64
 	// MaxResidualRiskPpm denies when the claimed `residual_risk_ppm` is above it. Setting it implies Require.
 	MaxResidualRiskPpm *float64
+	// ApprovedGoal (goal binding v3): the digests of the Goal IR the principal signed and of the policy compiled from it.
+	// When set, the root grant's goal commitment must open to exactly that pair (a v1/v2 grant does not), and setting it
+	// activates the policy. Both digests must be canonical base64url (32 bytes), else the check fails closed.
+	ApprovedGoal *ApprovedGoalRef
+	// approvedGoalBad: IntentPolicyFromJSON saw an `approved_goal` that is not a closed {goal_digest, policy_digest} object.
+	approvedGoalBad bool
+}
+
+// ApprovedGoalRef is the closed object {goal_digest, policy_digest} of goal binding v3.
+type ApprovedGoalRef struct {
+	GoalDigest   string
+	PolicyDigest string
 }
 
 func (p *IntentPolicy) active() bool {
-	return p != nil && (p.Require || p.MinFidelityPpm != nil || p.MaxResidualRiskPpm != nil)
+	return p != nil && (p.Require || p.MinFidelityPpm != nil || p.MaxResidualRiskPpm != nil || p.ApprovedGoal != nil || p.approvedGoalBad)
+}
+
+// valid: both digests canonical base64url, exactly 32 bytes.
+func (r *ApprovedGoalRef) valid() bool {
+	return r != nil && b64uOK(r.GoalDigest, b32) && b64uOK(r.PolicyDigest, b32)
+}
+
+// IntentGoalV3 is the v3 goal string "pca-intent:v3:<goal_digest>:<policy_digest>". A malformed digest is an error:
+// never commit to garbage.
+func IntentGoalV3(ref ApprovedGoalRef) (string, error) {
+	if !ref.valid() {
+		return "", fmt.Errorf("IntentGoalV3: goal_digest and policy_digest must be canonical base64url (32 bytes)")
+	}
+	return intentGoalV3Prefix + ref.GoalDigest + ":" + ref.PolicyDigest, nil
+}
+
+// IntentGoalCommitV3 is the v3 goal commitment for a salt (HashCanonical({d, goal: IntentGoalV3(ref), salt})).
+func IntentGoalCommitV3(ref ApprovedGoalRef, goalSalt string) (string, error) {
+	g, err := IntentGoalV3(ref)
+	if err != nil {
+		return "", err
+	}
+	return HashCanonical(map[string]any{"d": intentGoalCommitDomain, "goal": g, "salt": goalSalt})
 }
 
 // IntentGoalCommit = HashCanonical({d: "atlas-pca/goal/v1\x00", goal: "pca-intent:v1:"+ref+":"+mapDigest, salt}):
@@ -114,6 +150,9 @@ func decideIntent(pcactn, grant map[string]any, policy *IntentPolicy) (evaluated
 	if active && (!okThreshold(policy.MinFidelityPpm) || !okThreshold(policy.MaxResidualRiskPpm)) {
 		return true, "intent policy misconfigured: thresholds must be non-negative safe integers (fail closed)"
 	}
+	if active && (policy.approvedGoalBad || (policy.ApprovedGoal != nil && !policy.ApprovedGoal.valid())) {
+		return true, "intent policy misconfigured: approved_goal digests must be canonical base64url (32 bytes) (fail closed)"
+	}
 	if !has {
 		return true, "this verifier requires an intent binding but the PCActn carries none"
 	}
@@ -121,6 +160,14 @@ func decideIntent(pcactn, grant map[string]any, policy *IntentPolicy) (evaluated
 	commit, ok := rootGoalCommit(grant)
 	if !ok {
 		return true, "the root grant carries no envelope goal commitment to bind the intent to"
+	}
+	if policy != nil && policy.ApprovedGoal != nil {
+		salt, _ := m["goal_salt"].(string)
+		want, err := IntentGoalCommitV3(*policy.ApprovedGoal, salt)
+		if err != nil || want != commit {
+			return true, "the root grant's goal commitment does not open to the approved goal and compiled policy (v3)"
+		}
+		return decideIntentFloors(m, policy)
 	}
 	ref, _ := m["ref"].(string)
 	md, _ := m["map_digest"].(string)
@@ -133,6 +180,11 @@ func decideIntent(pcactn, grant map[string]any, policy *IntentPolicy) (evaluated
 	if err != nil || want != commit {
 		return true, "intent ref / map_digest / goal_salt do not open the root grant's goal commitment"
 	}
+	return decideIntentFloors(m, policy)
+}
+
+// decideIntentFloors: the fidelity / residual-risk floors, after the goal commitment opened.
+func decideIntentFloors(m map[string]any, policy *IntentPolicy) (evaluated bool, reason string) {
 	fid, _ := safeInt(m["fidelity_ppm"])
 	res, _ := safeInt(m["residual_risk_ppm"])
 	if policy != nil && policy.MinFidelityPpm != nil && !(float64(fid) >= *policy.MinFidelityPpm) {
@@ -145,7 +197,7 @@ func decideIntent(pcactn, grant map[string]any, policy *IntentPolicy) (evaluated
 }
 
 // IntentPolicyFromJSON builds an IntentPolicy from a decoded JSON object ({require?, min_fidelity_ppm?,
-// max_residual_risk_ppm?}; numbers as json.Number from ParseJSONLenient / StrictParse, or float64 / int / int64). A
+// max_residual_risk_ppm?, approved_goal?}; numbers as json.Number from ParseJSONLenient / StrictParse, or float64 / int / int64). A
 // threshold keeps its NUMERIC VALUE whatever its lexical form (950000.0 and 1e6 are 950000 and 1000000; "-0" is -0),
 // so the check accepts exactly the non-negative safe integers and fails closed on anything else. A present non-numeric
 // threshold (null, bool, string, ...) or an unparseable number becomes NaN (misconfigured). nil when v is not an
@@ -179,6 +231,17 @@ func IntentPolicyFromJSON(v any) *IntentPolicy {
 	}
 	p.MinFidelityPpm = num("min_fidelity_ppm")
 	p.MaxResidualRiskPpm = num("max_residual_risk_ppm")
+	if x, has := m["approved_goal"]; has {
+		// closed object: exactly goal_digest and policy_digest, both strings; anything else is a misconfiguration
+		ag, _ := x.(map[string]any)
+		gd, ok1 := ag["goal_digest"].(string)
+		pd, ok2 := ag["policy_digest"].(string)
+		if len(ag) == 2 && ok1 && ok2 {
+			p.ApprovedGoal = &ApprovedGoalRef{GoalDigest: gd, PolicyDigest: pd}
+		} else {
+			p.approvedGoalBad = true
+		}
+	}
 	return p
 }
 
