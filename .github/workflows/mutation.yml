@@ -1,8 +1,19 @@
 name: Mutation
 
 # Mutation testing of the verifier (every non-test .go file) with go-mutate (flagship tools/pca-audit/go-mutate), split
-# into shards on separate runners. The merge job checks the survivors against the equivalent-mutant ledger
+# into shards on separate runners: the root package is planned once by the prep job (coverage selection, type-check verdicts and ONE
+# schema test binary holding every guardable mutant, go-mutate -prep) and its mutants are packed by measured cost into R shards
+# (1..60, then 80..R+19; R from the prep, at least 60) of about 40 min of mutant work each (shard-root, shard-root-b, shard-root-c, 256 jobs per
+# matrix at most); shard 61 is the separate sigstore module (sigstore/,
+# its own go.mod; mutated whole, never carried, reported as sigstore/<file>), shards 62..66 and 68 are the opt-in cgo modules (sealkit,
+# lweotkit + lweotkit/party, blstkit, fndsakit, wasmhost, zkkit: each its own go.mod, built with the native library of its replay workflow,
+# mutated whole, never carried, reported as <module>/<file>) and shard 67 the pure-Go adapter modules (adakit, adkgo, anthropic, echo,
+# eino, genkit, gin, langchaingo, openai) plus the root module's sub-packages (goalkernel, partycli). One native library is built once
+# per module shard, never per slice. The merge job checks the survivors against the equivalent-mutant ledger
 # (native-check-equivalents.mjs): it passes when every survivor is a ledgered equivalent and no ledger entry is stale.
+# Job layout (each shard targets <= 40 min): sigstore is sliced in two (61, 69), sealkit in three (62, 70, 71), blstkit in three (64, 72, 73),
+# shard 74 runs rootkernel + lessstub (less_sign_stub.go, mutated WITHOUT the less tag), and the shard-windows job (windows-latest) mutates
+# the Windows-only files perm_windows.go (shards 75, 77, 78) and durable_state_windows.go (76, 79); the lessc hand mutants run in three slices.
 # Runs on demand and on ci/** branches (the release-candidate check), never on main pushes.
 #
 # TARGETED mode (the default whenever a usable baseline exists; the pca-ruby scheme, tools/pca-audit/mut-carry): every shard
@@ -28,7 +39,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: ['ci/**']
+    branches: ['ci/**', '!ci/build-**']
 
 permissions:
   contents: read
@@ -41,13 +52,40 @@ concurrency:
 
 env:
   CRATE: go-pca
-  SHARDS: '16'
+  # SHARDS (the total) comes from the prep job: R root shards + the 19 fixed ones (61..79)
   # part of the baseline identity: a run with other mutator flags is no baseline
   MUT_CFG: 'go-mutate -tags less'
+  SEAL_TAG: v4.1.2
 
 jobs:
+  reuse:
+    name: reuse check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      skip: ${{ steps.reuse.outputs.skip }}
+      hash: ${{ steps.reuse.outputs.hash }}
+      source: ${{ steps.reuse.outputs.source }}
+    steps:
+      - uses: actions/checkout@v4
+      # input-hash reuse (ci-reuse.mjs): when an earlier run recorded the same input hash, every other job of this run is skipped.
+      # continue-on-error: a failing check can only mean "no reuse"; FORCE_FULL / force_full / [force-full] bypass it.
+      - id: reuse
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE_FULL: ${{ inputs.force_full || inputs.full || vars.FORCE_FULL == '1' || contains(github.event.head_commit.message, '[force-full]') }}
+          GATE_FULL: ${{ inputs.full || (startsWith(github.ref_name, 'ci/') && endsWith(github.ref_name, '-rc') || startsWith(github.ref_name, 'ci/gate-')) || contains(github.event.head_commit.message, '[force-full]') }}
+          PARTIAL: ${{ false }}
+          EXTRA: ''
+        run: node .github/scripts/ci-reuse.mjs check --workflow=mutation --self=.github/workflows/mutation.yml --external=flagship --extra="$EXTRA"
   # the tests + corpus this run mutates against (the next run's baseline check); small, runs alongside the shards
   snapshot:
+    if: ${{ needs.reuse.outputs.skip != 'true' }}
+    needs: reuse
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -62,33 +100,79 @@ jobs:
           ls ./*.go | sed 's|^\./||' | grep -v '_test\.go$' > "$RUNNER_TEMP/src.txt"
           node "$MONO/tools/pca-audit/mut-carry/snapshot.mjs" make --root="$GITHUB_WORKSPACE" --exclude-list="$RUNNER_TEMP/src.txt" \
             --corpus-root="$MONO" --out=mut-snapshot --cfg="$MUT_CFG" \
-            --tool-files="$MONO/tools/pca-audit/go-mutate/main.go,$MONO/tools/pca-audit/mut-carry/lib.mjs"
+            --tool-files="$MONO/tools/pca-audit/go-mutate/main.go,$MONO/tools/pca-audit/go-mutate/cover.go,$MONO/tools/pca-audit/go-mutate/schema.go,$MONO/tools/pca-audit/go-mutate/prep.go,$MONO/tools/pca-audit/mut-carry/lib.mjs"
       - uses: actions/upload-artifact@v4
         with:
           name: mut-snapshot
           path: mut-snapshot/
           retention-days: 30
 
-  shard:
-    name: shard ${{ matrix.shard }}/16
+  # the real wasmtime host (TestRealHostReferenceComponent fails under CI=true without it), built once for all root-package shards
+  wasmtime-host:
+    if: ${{ needs.reuse.outputs.skip != 'true' }}
+    needs: reuse
     runs-on: ubuntu-latest
-    timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Flagship tooling
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: pca-wasmtime-host
+        run: .github/scripts/build-wasmtime-host.sh "$RUNNER_TEMP/wasmtime-host" "$MONO/packages/pca-sandbox/wasmtime-host"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasmtime-host
+          path: ${{ runner.temp }}/wasmtime-host/pca-wasmtime-host
+          retention-days: 7
+
+  # the root package, planned once: the per-test coverage, the type-check verdicts and the schema test binary (every guardable
+  # mutant compiled into ONE binary, switched by GOMUT_ID) are made here, cross-checked against real builds, and the mutants are
+  # packed into shards by their measured cost (go-mutate -prep: plan/<i>.json per shard, plan/summary.json has the estimate)
+  prep:
+    if: ${{ needs.reuse.outputs.skip != 'true' }}
+    needs: [reuse, wasmtime-host]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      root_a: ${{ steps.plan.outputs.root_a }}
+      root_b: ${{ steps.plan.outputs.root_b }}
+      root_c: ${{ steps.plan.outputs.root_c }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Flagship tooling
         run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: RSA DPoP corpus (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/dpop-rsa-corpus.sh "$GITHUB_WORKSPACE/testdata/ref-dpop-rsa.json.gz"
+      - name: Secret-key oracle corpora (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/gen-secret-corpus.sh "$GITHUB_WORKSPACE/testdata" oprf:oprf core-frost-java:core-frost-java mpc-ot:mpc-ot attest-eat:attest-eat frost-dkg:frost-dkg
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasmtime-host
+          path: ${{ runner.temp }}/wasmtime-host
+      # the host is spawned by the tests under the mutate step's address-space cap, which wasmtime's memory reservation exceeds: the
+      # pinned entry is a launcher that lifts the soft cap for the host alone (the hard limit stays unlimited, see the Mutate step).
+      # It refuses to exec unless the host's sha256 equals the digest embedded here, so the launcher pin transitively pins the host.
+      - name: pca-wasmtime-host (real host for the sandbox component test)
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/wasmtime-host"; chmod +x "$d/pca-wasmtime-host"
+          host_sum="$(sha256sum "$d/pca-wasmtime-host" | cut -d' ' -f1)"
+          # absolute sha256sum path: the host runs with an empty environment (no PATH)
+          printf '#!/bin/sh\nh=$(/usr/bin/sha256sum %s)\n[ "${h%%%% *}" = %s ] || { echo "pca-wasmtime-host does not match its pinned digest" >&2; exit 1; }\nulimit -S -v unlimited\nexec %s "$@"\n' \
+            "$d/pca-wasmtime-host" "$host_sum" "$d/pca-wasmtime-host" > "$d/launch.sh"
+          chmod +x "$d/launch.sh"
+          { echo "PCA_WASMTIME_HOST_BIN=$d/launch.sh"; echo "PCA_WASMTIME_HOST_SHA256=$(sha256sum "$d/launch.sh" | cut -d' ' -f1)"; } >> "$GITHUB_ENV"
       - name: Baseline results (targeted mode)
-        if: ${{ !inputs.full }}
+        if: ${{ !(inputs.full || (startsWith(github.ref_name, 'ci/') && endsWith(github.ref_name, '-rc') || startsWith(github.ref_name, 'ci/gate-')) || contains(github.event.head_commit.message, '[force-full]')) }}
         env:
           GH_TOKEN: ${{ github.token }}
           BASELINE: ${{ inputs.baseline_run }}
@@ -96,50 +180,662 @@ jobs:
           ls ./*.go | sed 's|^\./||' | grep -v '_test\.go$' > "$RUNNER_TEMP/src.txt"
           node "$MONO/tools/pca-audit/mut-carry/snapshot.mjs" make --root="$GITHUB_WORKSPACE" --exclude-list="$RUNNER_TEMP/src.txt" \
             --corpus-root="$MONO" --out="$RUNNER_TEMP/snap" --cfg="$MUT_CFG" \
-            --tool-files="$MONO/tools/pca-audit/go-mutate/main.go,$MONO/tools/pca-audit/mut-carry/lib.mjs"
+            --tool-files="$MONO/tools/pca-audit/go-mutate/main.go,$MONO/tools/pca-audit/go-mutate/cover.go,$MONO/tools/pca-audit/go-mutate/schema.go,$MONO/tools/pca-audit/go-mutate/prep.go,$MONO/tools/pca-audit/mut-carry/lib.mjs"
           node "$MONO/tools/pca-audit/mut-carry/baseline.mjs" --repo="$GITHUB_REPOSITORY" --branch="$GITHUB_REF_NAME" \
             --exclude-run="$GITHUB_RUN_ID" --explicit="$BASELINE" --snapshot="$RUNNER_TEMP/snap" --out="$RUNNER_TEMP/base" >> "$GITHUB_ENV"
-      - name: Mutate
+      - name: Plan
+        id: plan
         run: |
-          (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate" .)
-          # a mutant that allocates without bound must die alone (killed), not exhaust the runner: 4 GiB address space per
-          # process, 3 mutants at a time
-          ulimit -v 4194304
-          # -tags less: the same build as ci.yml (cgo + the module's lessc/ copy). Without it less_cgo.go is never compiled
-          # (all its mutants "survive" untested) and the LESS known answers (less_cgo_test.go) never run against pq.go.
+          set -o pipefail
+          # the tool's own self-test first (schema guards vs type-position literals, verdicts): seconds, before the long prep
+          (cd "$MONO/tools/pca-audit/go-mutate" && go test -count=1 . && go build -o "$RUNNER_TEMP/gomutate" .)
+          # the same 4 GiB address-space cap on every test binary as the shards (go test -exec; the schema binary via -exec)
+          printf '#!/bin/sh\nulimit -S -v 4194304\nexec "$@"\n' > "$RUNNER_TEMP/capexec.sh"; chmod +x "$RUNNER_TEMP/capexec.sh"
+          export GOFLAGS="-exec=$RUNNER_TEMP/capexec.sh"
           carry=()
           [ -z "${BASE_POOL:-}" ] || carry=(-carry "$BASE_POOL")
-          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -shard "$(( ${{ matrix.shard }} - 1 ))/$SHARDS" -j 3 -timeout 300s \
-            "${carry[@]}" -out "$RUNNER_TEMP/raw.json" | tail -40
-          # the next run's baseline: this slice's results (carried ones included)
+          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -prep "$RUNNER_TEMP/mut-prep" -exec "$RUNNER_TEMP/capexec.sh" -j 4 \
+            -timeout 300s -budget 40m -min-shards 60 -max-shards 768 "${carry[@]}" | tail -40
+          cat "$RUNNER_TEMP/mut-prep/plan/summary.json"
+          # shard numbers: plan i -> i+1 for the first 60, i+20 after them (61..79 are the fixed shards); 256 per matrix
+          node -e '
+            const r = Number(require("fs").readFileSync(process.argv[1], "utf8"));
+            const n = Array.from({ length: r }, (_, i) => (i < 60 ? i + 1 : i + 20));
+            console.log("shards=" + (r + 19)); console.log("root_a=" + JSON.stringify(n.slice(0, 256))); console.log("root_b=" + JSON.stringify(n.slice(256, 512))); console.log("root_c=" + JSON.stringify(n.slice(512)));
+          ' "$RUNNER_TEMP/mut-prep/plan/count" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mut-prep
+          path: ${{ runner.temp }}/mut-prep/
+          retention-days: 3
+
+  # the root package's mutants, one prep plan file per shard (shard n runs plan n-1 for n <= 60, n-20 after)
+  shard-root:
+    if: ${{ needs.reuse.outputs.skip != 'true' && needs.prep.result == 'success' }}
+    needs: [reuse, wasmtime-host, prep]
+    name: shard ${{ matrix.shard }}/${{ needs.prep.outputs.shards }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SHARDS: ${{ needs.prep.outputs.shards }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6 # fair share: about 24 runners per PCA repo (10 repos, about 180 shared runners); one repo must never starve the rest
+      matrix:
+        shard: ${{ fromJSON(needs.prep.outputs.root_a) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Flagship tooling
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: RSA DPoP corpus (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/dpop-rsa-corpus.sh "$GITHUB_WORKSPACE/testdata/ref-dpop-rsa.json.gz"
+      - name: Secret-key oracle corpora (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/gen-secret-corpus.sh "$GITHUB_WORKSPACE/testdata" oprf:oprf core-frost-java:core-frost-java mpc-ot:mpc-ot attest-eat:attest-eat frost-dkg:frost-dkg
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasmtime-host
+          path: ${{ runner.temp }}/wasmtime-host
+      # the host is spawned by the tests under the mutate step's address-space cap, which wasmtime's memory reservation exceeds: the
+      # pinned entry is a launcher that lifts the soft cap for the host alone (the hard limit stays unlimited, see the Mutate step).
+      # It refuses to exec unless the host's sha256 equals the digest embedded here, so the launcher pin transitively pins the host.
+      - name: pca-wasmtime-host (real host for the sandbox component test)
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/wasmtime-host"; chmod +x "$d/pca-wasmtime-host"
+          host_sum="$(sha256sum "$d/pca-wasmtime-host" | cut -d' ' -f1)"
+          # absolute sha256sum path: the host runs with an empty environment (no PATH)
+          printf '#!/bin/sh\nh=$(/usr/bin/sha256sum %s)\n[ "${h%%%% *}" = %s ] || { echo "pca-wasmtime-host does not match its pinned digest" >&2; exit 1; }\nulimit -S -v unlimited\nexec %s "$@"\n' \
+            "$d/pca-wasmtime-host" "$host_sum" "$d/pca-wasmtime-host" > "$d/launch.sh"
+          chmod +x "$d/launch.sh"
+          { echo "PCA_WASMTIME_HOST_BIN=$d/launch.sh"; echo "PCA_WASMTIME_HOST_SHA256=$(sha256sum "$d/launch.sh" | cut -d' ' -f1)"; } >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: mut-prep
+          path: ${{ runner.temp }}/mut-prep
+      - name: Mutate
+        run: |
+          set -o pipefail
+          (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate" .)
+          chmod +x "$RUNNER_TEMP/mut-prep/schema.test"
+          # the 4 GiB address-space cap goes on the test binaries only (a mutant that allocates without bound dies alone, run-error):
+          # go test -exec for the standalone builds, -exec for the schema binary
+          printf '#!/bin/sh\nulimit -S -v 4194304\nexec "$@"\n' > "$RUNNER_TEMP/capexec.sh"; chmod +x "$RUNNER_TEMP/capexec.sh"
+          export GOFLAGS="-exec=$RUNNER_TEMP/capexec.sh"
+          n=${{ matrix.shard }}; i=$(( n <= 60 ? n - 1 : n - 20 ))
+          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -plan "$RUNNER_TEMP/mut-prep/plan/$i.json" \
+            -schema-bin "$RUNNER_TEMP/mut-prep/schema.test" -exec "$RUNNER_TEMP/capexec.sh" -j 4 -timeout 300s -out "$RUNNER_TEMP/raw.json" | tail -40
+          # the next run's baseline: this shard's results (carried ones included)
           mkdir -p "$RUNNER_TEMP/mut-results"; cp "$RUNNER_TEMP/raw.json" "$RUNNER_TEMP/mut-results/results.json"
       - name: Report
         run: |
           node -e '
             const fs = require("fs"); const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8")) || [];
             const counts = {}; for (const m of raw) counts[m.status] = (counts[m.status] || 0) + 1;
-            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
+            const dir = ["61", "69"].includes(process.argv[2]) ? "sigstore/" : "";
+            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: dir + m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
             if (raw.some((m) => !m.status)) { console.error("unfinished mutants in the shard"); process.exit(1); }
             fs.writeFileSync("counts.json", JSON.stringify(counts)); fs.writeFileSync("survivors.json", JSON.stringify(surv));
-          ' "$RUNNER_TEMP/raw.json"
+            // run errors (out of memory, stack overflow, signal death, no test failed) and timeouts: no test decided them; the
+            // merge fails on each one not in mutation-run-errors.json (a timeout needs a proof that the mutant itself loops)
+            const errs = raw.filter((m) => m.status === "run-error" || m.status === "killed-timeout").map((m) => ({ file: dir + m.file, lineno: m.line, text: m.line_text.trim(), mutant: m.mutant, evidence: (m.status === "killed-timeout" ? "timeout: " : "") + (m.evidence || "") }));
+            fs.writeFileSync("run-errors-" + process.argv[2] + ".json", JSON.stringify(errs, null, 1));
+            console.log(`timeouts: ${counts["killed-timeout"] || 0}, run errors: ${errs.length}`);
+          ' "$RUNNER_TEMP/raw.json" ${{ matrix.shard }}
           node .github/scripts/mutation-shard-report.mjs --crate="$CRATE" --shard=${{ matrix.shard }} --of="$SHARDS" --tool=go-mutate \
             --counts=counts.json --survivors=survivors.json --out=shard-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v4
         with:
           name: shard-${{ matrix.shard }}
-          path: shard-${{ matrix.shard }}.json
+          path: |
+            shard-${{ matrix.shard }}.json
+            run-errors-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v4
         with:
           name: mut-results-${{ matrix.shard }}
           path: ${{ runner.temp }}/mut-results/
           retention-days: 30
 
+  # the root package's mutants, one prep plan file per shard (shard n runs plan n-1 for n <= 60, n-20 after)
+  shard-root-b:
+    if: ${{ needs.reuse.outputs.skip != 'true' && needs.prep.result == 'success' && needs.prep.outputs.root_b != '[]' }}
+    needs: [reuse, wasmtime-host, prep]
+    name: shard ${{ matrix.shard }}/${{ needs.prep.outputs.shards }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SHARDS: ${{ needs.prep.outputs.shards }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6 # fair share: about 24 runners per PCA repo (10 repos, about 180 shared runners); one repo must never starve the rest
+      matrix:
+        shard: ${{ fromJSON(needs.prep.outputs.root_b) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Flagship tooling
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: RSA DPoP corpus (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/dpop-rsa-corpus.sh "$GITHUB_WORKSPACE/testdata/ref-dpop-rsa.json.gz"
+      - name: Secret-key oracle corpora (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/gen-secret-corpus.sh "$GITHUB_WORKSPACE/testdata" oprf:oprf core-frost-java:core-frost-java mpc-ot:mpc-ot attest-eat:attest-eat frost-dkg:frost-dkg
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasmtime-host
+          path: ${{ runner.temp }}/wasmtime-host
+      # the host is spawned by the tests under the mutate step's address-space cap, which wasmtime's memory reservation exceeds: the
+      # pinned entry is a launcher that lifts the soft cap for the host alone (the hard limit stays unlimited, see the Mutate step).
+      # It refuses to exec unless the host's sha256 equals the digest embedded here, so the launcher pin transitively pins the host.
+      - name: pca-wasmtime-host (real host for the sandbox component test)
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/wasmtime-host"; chmod +x "$d/pca-wasmtime-host"
+          host_sum="$(sha256sum "$d/pca-wasmtime-host" | cut -d' ' -f1)"
+          # absolute sha256sum path: the host runs with an empty environment (no PATH)
+          printf '#!/bin/sh\nh=$(/usr/bin/sha256sum %s)\n[ "${h%%%% *}" = %s ] || { echo "pca-wasmtime-host does not match its pinned digest" >&2; exit 1; }\nulimit -S -v unlimited\nexec %s "$@"\n' \
+            "$d/pca-wasmtime-host" "$host_sum" "$d/pca-wasmtime-host" > "$d/launch.sh"
+          chmod +x "$d/launch.sh"
+          { echo "PCA_WASMTIME_HOST_BIN=$d/launch.sh"; echo "PCA_WASMTIME_HOST_SHA256=$(sha256sum "$d/launch.sh" | cut -d' ' -f1)"; } >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: mut-prep
+          path: ${{ runner.temp }}/mut-prep
+      - name: Mutate
+        run: |
+          set -o pipefail
+          (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate" .)
+          chmod +x "$RUNNER_TEMP/mut-prep/schema.test"
+          # the 4 GiB address-space cap goes on the test binaries only (a mutant that allocates without bound dies alone, run-error):
+          # go test -exec for the standalone builds, -exec for the schema binary
+          printf '#!/bin/sh\nulimit -S -v 4194304\nexec "$@"\n' > "$RUNNER_TEMP/capexec.sh"; chmod +x "$RUNNER_TEMP/capexec.sh"
+          export GOFLAGS="-exec=$RUNNER_TEMP/capexec.sh"
+          n=${{ matrix.shard }}; i=$(( n <= 60 ? n - 1 : n - 20 ))
+          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -plan "$RUNNER_TEMP/mut-prep/plan/$i.json" \
+            -schema-bin "$RUNNER_TEMP/mut-prep/schema.test" -exec "$RUNNER_TEMP/capexec.sh" -j 4 -timeout 300s -out "$RUNNER_TEMP/raw.json" | tail -40
+          # the next run's baseline: this shard's results (carried ones included)
+          mkdir -p "$RUNNER_TEMP/mut-results"; cp "$RUNNER_TEMP/raw.json" "$RUNNER_TEMP/mut-results/results.json"
+      - name: Report
+        run: |
+          node -e '
+            const fs = require("fs"); const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8")) || [];
+            const counts = {}; for (const m of raw) counts[m.status] = (counts[m.status] || 0) + 1;
+            const dir = ["61", "69"].includes(process.argv[2]) ? "sigstore/" : "";
+            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: dir + m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
+            if (raw.some((m) => !m.status)) { console.error("unfinished mutants in the shard"); process.exit(1); }
+            fs.writeFileSync("counts.json", JSON.stringify(counts)); fs.writeFileSync("survivors.json", JSON.stringify(surv));
+            // run errors (out of memory, stack overflow, signal death, no test failed) and timeouts: no test decided them; the
+            // merge fails on each one not in mutation-run-errors.json (a timeout needs a proof that the mutant itself loops)
+            const errs = raw.filter((m) => m.status === "run-error" || m.status === "killed-timeout").map((m) => ({ file: dir + m.file, lineno: m.line, text: m.line_text.trim(), mutant: m.mutant, evidence: (m.status === "killed-timeout" ? "timeout: " : "") + (m.evidence || "") }));
+            fs.writeFileSync("run-errors-" + process.argv[2] + ".json", JSON.stringify(errs, null, 1));
+            console.log(`timeouts: ${counts["killed-timeout"] || 0}, run errors: ${errs.length}`);
+          ' "$RUNNER_TEMP/raw.json" ${{ matrix.shard }}
+          node .github/scripts/mutation-shard-report.mjs --crate="$CRATE" --shard=${{ matrix.shard }} --of="$SHARDS" --tool=go-mutate \
+            --counts=counts.json --survivors=survivors.json --out=shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: |
+            shard-${{ matrix.shard }}.json
+            run-errors-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mut-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/mut-results/
+          retention-days: 30
+
+  shard-root-c:
+    if: ${{ needs.reuse.outputs.skip != 'true' && needs.prep.result == 'success' && needs.prep.outputs.root_c != '[]' }}
+    needs: [reuse, wasmtime-host, prep]
+    name: shard ${{ matrix.shard }}/${{ needs.prep.outputs.shards }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SHARDS: ${{ needs.prep.outputs.shards }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6 # fair share: about 24 runners per PCA repo (10 repos, about 180 shared runners); one repo must never starve the rest
+      matrix:
+        shard: ${{ fromJSON(needs.prep.outputs.root_c) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Flagship tooling
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: RSA DPoP corpus (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/dpop-rsa-corpus.sh "$GITHUB_WORKSPACE/testdata/ref-dpop-rsa.json.gz"
+      - name: Secret-key oracle corpora (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/gen-secret-corpus.sh "$GITHUB_WORKSPACE/testdata" oprf:oprf core-frost-java:core-frost-java mpc-ot:mpc-ot attest-eat:attest-eat frost-dkg:frost-dkg
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasmtime-host
+          path: ${{ runner.temp }}/wasmtime-host
+      # the host is spawned by the tests under the mutate step's address-space cap, which wasmtime's memory reservation exceeds: the
+      # pinned entry is a launcher that lifts the soft cap for the host alone (the hard limit stays unlimited, see the Mutate step).
+      # It refuses to exec unless the host's sha256 equals the digest embedded here, so the launcher pin transitively pins the host.
+      - name: pca-wasmtime-host (real host for the sandbox component test)
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/wasmtime-host"; chmod +x "$d/pca-wasmtime-host"
+          host_sum="$(sha256sum "$d/pca-wasmtime-host" | cut -d' ' -f1)"
+          # absolute sha256sum path: the host runs with an empty environment (no PATH)
+          printf '#!/bin/sh\nh=$(/usr/bin/sha256sum %s)\n[ "${h%%%% *}" = %s ] || { echo "pca-wasmtime-host does not match its pinned digest" >&2; exit 1; }\nulimit -S -v unlimited\nexec %s "$@"\n' \
+            "$d/pca-wasmtime-host" "$host_sum" "$d/pca-wasmtime-host" > "$d/launch.sh"
+          chmod +x "$d/launch.sh"
+          { echo "PCA_WASMTIME_HOST_BIN=$d/launch.sh"; echo "PCA_WASMTIME_HOST_SHA256=$(sha256sum "$d/launch.sh" | cut -d' ' -f1)"; } >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: mut-prep
+          path: ${{ runner.temp }}/mut-prep
+      - name: Mutate
+        run: |
+          set -o pipefail
+          (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate" .)
+          chmod +x "$RUNNER_TEMP/mut-prep/schema.test"
+          # the 4 GiB address-space cap goes on the test binaries only (a mutant that allocates without bound dies alone, run-error):
+          # go test -exec for the standalone builds, -exec for the schema binary
+          printf '#!/bin/sh\nulimit -S -v 4194304\nexec "$@"\n' > "$RUNNER_TEMP/capexec.sh"; chmod +x "$RUNNER_TEMP/capexec.sh"
+          export GOFLAGS="-exec=$RUNNER_TEMP/capexec.sh"
+          n=${{ matrix.shard }}; i=$(( n <= 60 ? n - 1 : n - 20 ))
+          "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less -plan "$RUNNER_TEMP/mut-prep/plan/$i.json" \
+            -schema-bin "$RUNNER_TEMP/mut-prep/schema.test" -exec "$RUNNER_TEMP/capexec.sh" -j 4 -timeout 300s -out "$RUNNER_TEMP/raw.json" | tail -40
+          # the next run's baseline: this shard's results (carried ones included)
+          mkdir -p "$RUNNER_TEMP/mut-results"; cp "$RUNNER_TEMP/raw.json" "$RUNNER_TEMP/mut-results/results.json"
+      - name: Report
+        run: |
+          node -e '
+            const fs = require("fs"); const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8")) || [];
+            const counts = {}; for (const m of raw) counts[m.status] = (counts[m.status] || 0) + 1;
+            const dir = ["61", "69"].includes(process.argv[2]) ? "sigstore/" : "";
+            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: dir + m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
+            if (raw.some((m) => !m.status)) { console.error("unfinished mutants in the shard"); process.exit(1); }
+            fs.writeFileSync("counts.json", JSON.stringify(counts)); fs.writeFileSync("survivors.json", JSON.stringify(surv));
+            // run errors (out of memory, stack overflow, signal death, no test failed) and timeouts: no test decided them; the
+            // merge fails on each one not in mutation-run-errors.json (a timeout needs a proof that the mutant itself loops)
+            const errs = raw.filter((m) => m.status === "run-error" || m.status === "killed-timeout").map((m) => ({ file: dir + m.file, lineno: m.line, text: m.line_text.trim(), mutant: m.mutant, evidence: (m.status === "killed-timeout" ? "timeout: " : "") + (m.evidence || "") }));
+            fs.writeFileSync("run-errors-" + process.argv[2] + ".json", JSON.stringify(errs, null, 1));
+            console.log(`timeouts: ${counts["killed-timeout"] || 0}, run errors: ${errs.length}`);
+          ' "$RUNNER_TEMP/raw.json" ${{ matrix.shard }}
+          node .github/scripts/mutation-shard-report.mjs --crate="$CRATE" --shard=${{ matrix.shard }} --of="$SHARDS" --tool=go-mutate \
+            --counts=counts.json --survivors=survivors.json --out=shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: |
+            shard-${{ matrix.shard }}.json
+            run-errors-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mut-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/mut-results/
+          retention-days: 30
+
+  shard:
+    if: ${{ needs.reuse.outputs.skip != 'true' && needs.prep.result == 'success' }}
+    needs: [reuse, wasmtime-host, prep]
+    name: shard ${{ matrix.shard }}/${{ needs.prep.outputs.shards }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      SHARDS: ${{ needs.prep.outputs.shards }}
+    strategy:
+      fail-fast: false
+      max-parallel: 6 # fair share: about 24 runners per PCA repo (10 repos, about 180 shared runners); one repo must never starve the rest
+      matrix:
+        shard: [61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Flagship tooling
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: RSA DPoP corpus (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/dpop-rsa-corpus.sh "$GITHUB_WORKSPACE/testdata/ref-dpop-rsa.json.gz"
+      - name: Secret-key oracle corpora (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/gen-secret-corpus.sh "$GITHUB_WORKSPACE/testdata" oprf:oprf core-frost-java:core-frost-java mpc-ot:mpc-ot attest-eat:attest-eat frost-dkg:frost-dkg
+      # opt-in cgo modules (shards 62..66 and 68): the same native library setup as the module's replay workflow. The source layout the
+      # replay workflows use (the module copied under mono/sdks/go-pca) is rebuilt here; the module is mutated in that copy.
+      - name: Module of this shard
+        if: ${{ matrix.shard > 61 && matrix.shard != 69 }}
+        shell: bash
+        run: |
+          # a big module is sliced over several shards (go-mutate -shard i/n, interleaved by mutant): SLICE is this shard's i/n
+          sl=0/1
+          case ${{ matrix.shard }} in
+            62) m="sealkit"; sl=0/3;; 70) m="sealkit"; sl=1/3;; 71) m="sealkit"; sl=2/3;;
+            63) m="lweotkit lweotkit/party";;
+            64) m="blstkit"; sl=0/3;; 72) m="blstkit"; sl=1/3;; 73) m="blstkit"; sl=2/3;;
+            65) m="fndsakit";; 66) m="wasmhost";;
+            67) m="adakit adakit/install adkgo anthropic echo eino genkit gin langchaingo openai goalkernel partycli wasmhostbin";;
+            68) m="zkkit";;
+            74) m="rootkernel lessstub";;
+          esac
+          echo "MODDIRS=$m" >> "$GITHUB_ENV"
+          echo "SLICE=$sl" >> "$GITHUB_ENV"
+          .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - name: Secret-key oracle corpus (blstkit ABE; never committed)
+        if: ${{ matrix.shard == 64 || matrix.shard == 72 || matrix.shard == 73 }}
+        shell: bash
+        run: .github/scripts/gen-secret-corpus.sh "$PCA_MONO_SDK/blstkit/testdata" abe:abe
+      - name: node-seal reference corpus (sealkit)
+        if: ${{ matrix.shard == 62 || matrix.shard == 70 || matrix.shard == 71 }}
+        run: .github/scripts/fhe-seal-corpus.sh "$RUNNER_TEMP/fhe-seal.json.gz"
+      - name: libsealc at the pinned SEAL tag (sealkit)
+        if: ${{ matrix.shard == 62 || matrix.shard == 70 || matrix.shard == 71 }}
+        working-directory: ${{ env.PCA_MONO_SDK }}/sealkit
+        run: |
+          lib="$($GITHUB_WORKSPACE/.github/scripts/build-libsealc.sh "$SEAL_TAG" "$RUNNER_TEMP/seal")"
+          { echo "CGO_LDFLAGS=-L$lib"; echo "LD_LIBRARY_PATH=$lib"; echo "PCA_FHE_SEAL_CORPUS=$RUNNER_TEMP/fhe-seal.json.gz"; } >> "$GITHUB_ENV"
+      - name: liblweot (lweotkit)
+        if: ${{ matrix.shard == 63 }}
+        run: |
+          lib="$(.github/scripts/build-liblweot.sh "$RUNNER_TEMP/lweot" "$RUNNER_TEMP/mono/packages/pca-mpc-lwe-ot-wasm/crate" | tail -1)"
+          diff "$lib/pca_lwe_ot.h" "$PCA_MONO_SDK/lweotkit/pca_lwe_ot.h"
+          { echo "CGO_LDFLAGS=-L$lib"; echo "LD_LIBRARY_PATH=$lib"; } >> "$GITHUB_ENV"
+      - name: libfndsa (fndsakit)
+        if: ${{ matrix.shard == 65 }}
+        run: |
+          lib="$(.github/scripts/build-libfndsa.sh "$RUNNER_TEMP/fndsa" "$RUNNER_TEMP/mono/packages/pca-fndsa-wasm/crate" | tail -1)"
+          diff "$lib/pca_fndsa.h" "$PCA_MONO_SDK/fndsakit/pca_fndsa.h"
+          { echo "ATLAS_PCA_LIBFNDSA=$lib"; echo "CGO_LDFLAGS=-L$lib"; echo "LD_LIBRARY_PATH=$lib"; echo "ATLAS_PCA_LIBFNDSA_REQUIRED=1"; } >> "$GITHUB_ENV"
+      - name: libpcazk (zkkit)
+        if: ${{ matrix.shard == 68 }}
+        run: |
+          lib="$(.github/scripts/build-libpcazk.sh "$RUNNER_TEMP/pcazk" "$RUNNER_TEMP/mono/packages/pca-zk/crate" | tail -1)"
+          diff "$lib/pca_zk.h" "$PCA_MONO_SDK/zkkit/pca_zk.h"
+          { echo "ATLAS_PCA_LIBPCAZK=$lib"; echo "CGO_LDFLAGS=-L$lib"; echo "LD_LIBRARY_PATH=$lib"; } >> "$GITHUB_ENV"
+      - name: pca-wasmtime-host (wasmhost)
+        if: ${{ matrix.shard == 66 }}
+        run: .github/scripts/build-wasmtime-host.sh "$RUNNER_TEMP/wasmtime-host" "$RUNNER_TEMP/mono/packages/pca-sandbox/wasmtime-host"
+      - uses: actions/download-artifact@v4
+        if: ${{ matrix.shard == 67 || matrix.shard == 74 }}
+        with:
+          name: wasmtime-host
+          path: ${{ runner.temp }}/wasmtime-host
+      # the host is spawned by the tests under the mutate step's address-space cap, which wasmtime's memory reservation exceeds: the
+      # pinned entry is a launcher that lifts the soft cap for the host alone (the hard limit stays unlimited, see the Mutate step).
+      # It refuses to exec unless the host's sha256 equals the digest embedded here, so the launcher pin transitively pins the host.
+      - name: pca-wasmtime-host (real host for the sandbox component test)
+        if: ${{ matrix.shard == 67 || matrix.shard == 74 }}
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/wasmtime-host"; chmod +x "$d/pca-wasmtime-host"
+          host_sum="$(sha256sum "$d/pca-wasmtime-host" | cut -d' ' -f1)"
+          # absolute sha256sum path: the host runs with an empty environment (no PATH)
+          printf '#!/bin/sh\nh=$(/usr/bin/sha256sum %s)\n[ "${h%%%% *}" = %s ] || { echo "pca-wasmtime-host does not match its pinned digest" >&2; exit 1; }\nulimit -S -v unlimited\nexec %s "$@"\n' \
+            "$d/pca-wasmtime-host" "$host_sum" "$d/pca-wasmtime-host" > "$d/launch.sh"
+          chmod +x "$d/launch.sh"
+          { echo "PCA_WASMTIME_HOST_BIN=$d/launch.sh"; echo "PCA_WASMTIME_HOST_SHA256=$(sha256sum "$d/launch.sh" | cut -d' ' -f1)"; } >> "$GITHUB_ENV"
+      - name: Mutate
+        run: |
+          # a failing go-mutate must fail the step, not hide behind the `| tail` it is piped into
+          set -o pipefail
+          (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate" .)
+          # a mutant that allocates without bound must die alone, not exhaust the runner: 4 GiB address space per process,
+          # 3 mutants at a time. Such a death is NOT a kill: go-mutate marks it run-error (no "--- FAIL:" line, or a runtime
+          # fatal error / signal death), and the merge requires a per-mutant reason in mutation-run-errors.json.
+          # (the opt-in modules link native libraries: wasmtime reserves far more address space than any cap allows, SEAL and the
+          # lattice code a few GiB, so the cap is lifted for wasmhost and 16 GiB for the others)
+          # The 4 GiB cap goes on the test binary only (go test -exec): capping the shell capped the Go compiler too, which needs
+          # more than 4 GiB of address space for the root test package (every root shard died "out of memory" while compiling).
+          case ${{ matrix.shard }} in 66) ;; 6[2-578]|7[0-4]) ulimit -v 16777216 ;; *)
+            printf '#!/bin/sh\nulimit -S -v 4194304\nexec "$@"\n' > "$RUNNER_TEMP/capexec.sh"; chmod +x "$RUNNER_TEMP/capexec.sh"
+            export GOFLAGS="-exec=$RUNNER_TEMP/capexec.sh" ;; esac
+          # -tags less: the same build as ci.yml (cgo + the module's lessc/ copy). Without it less_cgo.go is never compiled
+          # (all its mutants "survive" untested) and the LESS known answers (less_cgo_test.go) never run against pq.go.
+          if [ ${{ matrix.shard }} = 61 ] || [ ${{ matrix.shard }} = 69 ]; then
+            # the sigstore module (its go.mod replaces pca-go with ../): no carry, not part of the baseline pool. Two slices (61 = 0/2, 69 = 1/2).
+            si=0; [ ${{ matrix.shard }} = 61 ] || si=1
+            "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE/sigstore" -shard "$si/2" -j 3 -timeout 300s -out "$RUNNER_TEMP/raw.json" | tail -40
+            # the merge's plan guard counts its mutants
+            mkdir -p "$RUNNER_TEMP/sigstore-results/s$si"; cp "$RUNNER_TEMP/raw.json" "$RUNNER_TEMP/sigstore-results/s$si/results.json"
+            exit 0
+          fi
+          if [ ${{ matrix.shard }} -gt 61 ]; then
+            # opt-in modules and sub-packages: each directory whole, in the replay layout copy, no carry, not part of the baseline
+            # pool. Results are kept per directory (module-results/<dir with / as @>/results.json, file names relative to it) and
+            # joined into raw.json with the directory as the file prefix for the shard report.
+            : > "$RUNNER_TEMP/dirs.txt"
+            si="${SLICE%/*}"
+            for d in $MODDIRS; do
+              if [ "$d" = lessstub ]; then
+                # less_sign_stub.go is only compiled WITHOUT the less tag (what a consumer's default build gets): mutated without tags
+                # against its own tests (-run keeps go-mutate from running the whole root suite for coverage selection)
+                "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -files less_sign_stub.go -run '^TestLessSignStub' \
+                  -shard 0/1 -j 2 -timeout 600s -out "$RUNNER_TEMP/raw-one.json" | tail -40
+              elif [ "$d" = rootkernel ]; then
+                # the root package's three -tags pcagoalkernel files (the proved kernel's typed front door): hidden from the shards
+                # 1..60 build, mutated here against the root suite built with the kernel (results are reported without a directory prefix)
+                "$RUNNER_TEMP/gomutate" -dir "$GITHUB_WORKSPACE" -tags less,pcagoalkernel -files goal_compiler_kernel.go,goal_review_kernel.go,goal_selectors_kernel.go \
+                  -shard 0/1 -j 2 -timeout 600s -out "$RUNNER_TEMP/raw-one.json" | tail -40
+              else
+                tg=""; [ "$d" != goalkernel ] || tg="-tags pcagoalkernel" # goalkernel/kernel.go only builds with the kernel tag
+                (cd "$PCA_MONO_SDK/$d" && { [ ! -f go.mod ] || go mod tidy -e; })
+                "$RUNNER_TEMP/gomutate" -dir "$PCA_MONO_SDK/$d" $tg -shard "$SLICE" -j 2 -timeout 600s -out "$RUNNER_TEMP/raw-one.json" | tail -40
+              fi
+              r="$RUNNER_TEMP/module-results/${d//\//@}/s$si"; mkdir -p "$r"; cp "$RUNNER_TEMP/raw-one.json" "$r/results.json"
+              echo "$d" >> "$RUNNER_TEMP/dirs.txt"
+            done
+            node -e '
+              const fs = require("fs"), t = process.env.RUNNER_TEMP, all = [];
+              for (const d of fs.readFileSync(t + "/dirs.txt", "utf8").split("\n").filter(Boolean))
+                for (const m of JSON.parse(fs.readFileSync(`${t}/module-results/${d.replace(/\//g, "@")}/s${process.env.SLICE.split("/")[0]}/results.json`, "utf8")) || []) all.push({ ...m, file: (["rootkernel", "lessstub"].includes(d) ? "" : d + "/") + m.file });
+              fs.writeFileSync(t + "/raw.json", JSON.stringify(all));
+            '
+            exit 0
+          fi
+          echo "::error::shard ${{ matrix.shard }} has no module"; exit 1
+      - name: Report
+        run: |
+          node -e '
+            const fs = require("fs"); const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8")) || [];
+            const counts = {}; for (const m of raw) counts[m.status] = (counts[m.status] || 0) + 1;
+            const dir = ["61", "69"].includes(process.argv[2]) ? "sigstore/" : "";
+            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: dir + m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
+            if (raw.some((m) => !m.status)) { console.error("unfinished mutants in the shard"); process.exit(1); }
+            fs.writeFileSync("counts.json", JSON.stringify(counts)); fs.writeFileSync("survivors.json", JSON.stringify(surv));
+            // run errors (out of memory, stack overflow, signal death, no test failed) and timeouts: no test decided them; the
+            // merge fails on each one not in mutation-run-errors.json (a timeout needs a proof that the mutant itself loops)
+            const errs = raw.filter((m) => m.status === "run-error" || m.status === "killed-timeout").map((m) => ({ file: dir + m.file, lineno: m.line, text: m.line_text.trim(), mutant: m.mutant, evidence: (m.status === "killed-timeout" ? "timeout: " : "") + (m.evidence || "") }));
+            fs.writeFileSync("run-errors-" + process.argv[2] + ".json", JSON.stringify(errs, null, 1));
+            console.log(`timeouts: ${counts["killed-timeout"] || 0}, run errors: ${errs.length}`);
+          ' "$RUNNER_TEMP/raw.json" ${{ matrix.shard }}
+          node .github/scripts/mutation-shard-report.mjs --crate="$CRATE" --shard=${{ matrix.shard }} --of="$SHARDS" --tool=go-mutate \
+            --counts=counts.json --survivors=survivors.json --out=shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: |
+            shard-${{ matrix.shard }}.json
+            run-errors-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        if: ${{ matrix.shard == 61 || matrix.shard == 69 }}
+        with:
+          name: sigstore-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/sigstore-results/
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: ${{ matrix.shard > 61 && matrix.shard != 69 }}
+        with:
+          name: module-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/module-results/
+          retention-days: 30
+
+  # the Windows-only files (perm_windows.go: security descriptors; durable_state_windows.go: pid/errno/link-count/kill helpers) can only be
+# compiled and run on Windows: go-mutate mutates each file on windows-latest (no cgo, no less tag) against the tests that exercise it
+  # (perm_writers_test.go, perm_windows_test.go, durable_state_windows_test.go; the unix-only durable_state_test.go does not build there).
+  # go-mutate kills a timed-out run with taskkill /T /F (procgroup_windows.go), no ulimit wrapper. Results are reported as root files (module dir rootwin).
+  shard-windows:
+    if: ${{ needs.reuse.outputs.skip != 'true' && needs.prep.result == 'success' }}
+    needs: [reuse, prep]
+    name: shard ${{ matrix.shard }}/${{ needs.prep.outputs.shards }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      SHARDS: ${{ needs.prep.outputs.shards }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 155 perm_windows.go mutants took 52 min for 100 (2 workers): three interleaved slices; durable_state_windows.go (68) two
+          - { shard: 75, file: perm_windows.go, slice: 0/3 }
+          - { shard: 77, file: perm_windows.go, slice: 1/3 }
+          - { shard: 78, file: perm_windows.go, slice: 2/3 }
+          - { shard: 76, file: durable_state_windows.go, slice: 0/2 }
+          - { shard: 79, file: durable_state_windows.go, slice: 1/2 }
+    steps:
+      # byte-exact sources: no CRLF conversion on Windows (go-mutate works on byte offsets)
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Flagship tooling
+        run: .github/scripts/mutation-layout.sh "$CRATE"
+      - name: Mutate
+        run: |
+          set -o pipefail
+          (cd "$MONO/tools/pca-audit/go-mutate" && go build -o "$RUNNER_TEMP/gomutate.exe" .)
+          # the tests that exercise the Windows-only files
+          run="^($(grep -hE '^func Test[A-Za-z0-9_]+\(t \*testing\.T\)' perm_writers_test.go perm_windows_test.go durable_state_windows_test.go | sed -E 's/^func (Test[A-Za-z0-9_]+).*/\1/' | paste -sd'|' -))$"
+          echo "oracle: $run"
+          "$RUNNER_TEMP/gomutate.exe" -dir "$GITHUB_WORKSPACE" -files ${{ matrix.file }} -run "$run" -shard ${{ matrix.slice }} -j 2 -timeout 300s \
+            -out "$RUNNER_TEMP/raw.json" | tail -40
+          mkdir -p "$RUNNER_TEMP/module-results/rootwin/s${{ matrix.shard }}"; cp "$RUNNER_TEMP/raw.json" "$RUNNER_TEMP/module-results/rootwin/s${{ matrix.shard }}/results.json"
+      - name: Report
+        run: |
+          node -e '
+            const fs = require("fs"); const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8")) || [];
+            const counts = {}; for (const m of raw) counts[m.status] = (counts[m.status] || 0) + 1;
+            const dir = "";
+            const surv = raw.filter((m) => m.status === "SURVIVED").map((m) => ({ crate: "go-pca", file: dir + m.file, mutant: m.mutant, line: m.line_text.trim(), lineno: m.line }));
+            if (raw.some((m) => !m.status)) { console.error("unfinished mutants in the shard"); process.exit(1); }
+            fs.writeFileSync("counts.json", JSON.stringify(counts)); fs.writeFileSync("survivors.json", JSON.stringify(surv));
+            // run errors (out of memory, stack overflow, signal death, no test failed) and timeouts: no test decided them; the
+            // merge fails on each one not in mutation-run-errors.json (a timeout needs a proof that the mutant itself loops)
+            const errs = raw.filter((m) => m.status === "run-error" || m.status === "killed-timeout").map((m) => ({ file: dir + m.file, lineno: m.line, text: m.line_text.trim(), mutant: m.mutant, evidence: (m.status === "killed-timeout" ? "timeout: " : "") + (m.evidence || "") }));
+            fs.writeFileSync("run-errors-" + process.argv[2] + ".json", JSON.stringify(errs, null, 1));
+            console.log(`timeouts: ${counts["killed-timeout"] || 0}, run errors: ${errs.length}`);
+          ' "$RUNNER_TEMP/raw.json" ${{ matrix.shard }}
+          node .github/scripts/mutation-shard-report.mjs --crate="$CRATE" --shard=${{ matrix.shard }} --of="$SHARDS" --tool=go-mutate \
+            --counts=counts.json --survivors=survivors.json --out=shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: |
+            shard-${{ matrix.shard }}.json
+            run-errors-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/module-results/
+          retention-days: 30
+
+  # lessc/atlas_less.c (our C wrapper over the LESS reference) is C, which go-mutate never mutates: lessc-mutate.sh applies
+  # each hand-picked mutant of lessc-mutants.json to a copy of the module and runs the LESS known answers + the direct
+  # wrapper tests; every mutant must be killed or be a proven equivalent in lessc-mutants-ledger.json
+  # 133 mutants took ~65 min on one runner (the job limit): three slices of every third mutant (lessc-mutate.sh SLICE)
+  lessc-mutants:
+    name: lessc-mutants ${{ matrix.slice }}
+    if: ${{ needs.reuse.outputs.skip != 'true' }}
+    needs: reuse
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: ['0/3', '1/3', '2/3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - name: Hand mutants of lessc/atlas_less.c
+        env:
+          SLICE: ${{ matrix.slice }}
+        run: bash lessc-mutate.sh
+
+  # blstkit/gt.c (our C code over blst's API) is C, which go-mutate never mutates either: the same hand-mutation gate runs the
+  # blstkit reference replays (ABE, BBS, aggregate signatures) against each mutant of blstkit/gt-mutants.json. blst.h is the
+  # unmodified upstream header and blst_aux.h an empty one: neither has logic, so neither has mutants.
+  gt-mutants:
+    if: ${{ needs.reuse.outputs.skip != 'true' }}
+    needs: reuse
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      # the same corpus setup as modules.yml: the unmutated baseline replays the ABE reference, whose secret-key corpus CI generates
+      - name: Flagship checkout (for the ABE secret-key corpus generator)
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: ABE secret-key corpus (generated by the TypeScript reference; never committed)
+        shell: bash
+        run: .github/scripts/gen-secret-corpus.sh "$(pwd)/blstkit/testdata" abe:abe
+      - name: Hand mutants of blstkit/gt.c
+        env:
+          NAME: blstkit/gt.c
+          LIST: blstkit/gt-mutants.json
+          LEDGER: blstkit/gt-mutants-ledger.json
+          SRC: blstkit/gt.c
+          TESTDIR: blstkit
+          TAGS: ''
+          PRE: go mod tidy -e
+          RUN: '^(TestBbsMatchesReference|TestAbeMatchesReference|TestAggsigMatchesReference|TestBbsRoundTrip|TestAbeRoundTrip|TestUnregisteredKeysAreRefused|TestGtPairingRefusesEitherBadPoint)$'
+          BASE_PASS: TestBbsMatchesReference TestAbeMatchesReference TestAggsigMatchesReference
+        run: bash lessc-mutate.sh
+
   merge:
-    needs: shard
-    if: always()
+    needs: [reuse, prep, shard-root, shard-root-b, shard-root-c, shard, shard-windows, lessc-mutants, gt-mutants]
+    if: ${{ needs.reuse.outputs.skip != 'true' && (always()) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      SHARDS: ${{ needs.prep.outputs.shards }}
     steps:
+      - name: The lessc hand-mutation gate passed
+        run: |
+          [ "${{ needs.prep.result }}" = success ] || { echo "::error::prep (the root package plan): ${{ needs.prep.result }}"; exit 1; }
+          [ "${{ needs.lessc-mutants.result }}" = success ] || { echo "::error::lessc-mutants: ${{ needs.lessc-mutants.result }}"; exit 1; }
+          [ "${{ needs.gt-mutants.result }}" = success ] || { echo "::error::gt-mutants: ${{ needs.gt-mutants.result }}"; exit 1; }
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -150,13 +846,132 @@ jobs:
         with:
           path: reports
           pattern: shard-*
+      - uses: actions/download-artifact@v4
+        with:
+          path: mut-results
+          pattern: mut-results-*
+      - uses: actions/download-artifact@v4
+        with:
+          path: sigstore-results
+          pattern: sigstore-results-*
+      # the opt-in modules' results, one directory per module (the shard's MODDIR names it in the report; the plan guard and
+      # stale-killed.mjs read each directory's results.json with its name as the file prefix)
+      - uses: actions/download-artifact@v4
+        with:
+          path: module-results-raw
+          pattern: module-results-*
+      - name: One directory per module
+        run: |
+          mkdir -p module-results
+          # each module artifact holds one directory per mutated dir (the / of a nested one is an @)
+          cp -R module-results-raw/*/* module-results/
+      # a shipped source file outside the plan is never green: go-mutate takes the module root (the shard-root jobs) and sigstore/ (shard 61).
+      # Any other source file in any directory, a build constraint that hides a file from `-tags less`, or a planned file with no mutant
+      # in the results fails, unless mutation-excluded.json names its path with a reason the coordinator agreed.
+      - name: Every shipped source file is in the mutation plan
+        run: |
+          node - <<'EOF'
+          const fs = require("fs"), path = require("path");
+          const excl = JSON.parse(fs.readFileSync("mutation-excluded.json", "utf8"));
+          for (const e of excl) if (!e.path || !e.reason) { console.error("::error::exclusion without dir or reason: " + JSON.stringify(e)); process.exit(1); }
+          const mutated = new Set();
+          const walkR = (d, pre) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walkR(p, pre); else if (e.name === "results.json") for (const m of JSON.parse(fs.readFileSync(p, "utf8"))) mutated.add(pre + m.file); } };
+          walkR("mut-results", "");
+          walkR("sigstore-results", "sigstore/");
+          for (const m of fs.readdirSync("module-results")) walkR(path.join("module-results", m), ["rootkernel", "lessstub", "rootwin"].includes(m) ? "" : m.replace(/@/g, "/") + "/");
+          let bad = 0, n = 0;
+          const fail = (m) => { console.error("::error::" + m); bad++; };
+          const walk = (d) => { for (const e of fs.readdirSync(d || ".", { withFileTypes: true })) {
+            const p = d ? d + "/" + e.name : e.name;
+            if (e.isDirectory()) { if (e.name !== ".git" && e.name !== ".github" && e.name !== "mut-results" && e.name !== "sigstore-results" && e.name !== "module-results" && e.name !== "module-results-raw" && e.name !== "reports" && !excl.some((x) => x.path === p)) walk(p); continue; }
+            if (/\.h$/.test(e.name) && d !== "") continue; // declaration-only headers of the opt-in modules (the module's own libraries' C API, vendored blst.h)
+            if (!/\.(go|c|h|s|S|cc|cpp)$/.test(e.name) || e.name.endsWith("_test.go") || excl.some((x) => x.path === p)) continue;
+            n++;
+            // go-mutate only mutates Go: our own C file blstkit/gt.c is mutated by hand (the gt-mutants job, same gate as lessc)
+            if (p === "blstkit/gt.c" && fs.existsSync("blstkit/gt-mutants.json")) continue;
+            if (!e.name.endsWith(".go")) { fail("source file outside the mutation plan: " + p); continue; }
+            if (d !== "" && d !== "sigstore" && !["sealkit", "lweotkit", "lweotkit/party", "blstkit", "fndsakit", "wasmhost", "zkkit", "adakit", "adakit/install", "adkgo", "anthropic", "echo", "eino", "genkit", "gin", "langchaingo", "openai", "goalkernel", "partycli", "wasmhostbin"].includes(d)) { fail("source file outside the mutation plan: " + p); continue; }
+            const b = fs.readFileSync(p, "utf8").match(/^\/\/go:build (.*)$/m);
+            // the tags the mutation build sets: the shards' linux/amd64 runners with -tags less (cgo on), and goalkernel with pcagoalkernel
+            const tags = new Set(["less", "cgo", "linux", "amd64", "unix", "gc"]); if (d === "goalkernel") tags.add("pcagoalkernel");
+            const holds = (x, tags) => { const t = x.replace(/([()!]|&&|\|\|)/g, " $1 ").split(/\s+/).filter(Boolean); let i = 0;
+              const or = () => { let v = and(); while (t[i] === "||") { i++; const w = and(); v = v || w; } return v; };
+              const and = () => { let v = not(); while (t[i] === "&&") { i++; const w = not(); v = v && w; } return v; };
+              const not = () => { if (t[i] === "!") { i++; return !not(); } if (t[i] === "(") { i++; const v = or(); i++; return v; } return tags.has(t[i++]); };
+              return or(); };
+            // the two other builds with their own mutation runs: the root package WITHOUT the less tag (less_sign_stub.go, the lessstub run
+            // of shard 74) and the Windows build (perm_windows.go, durable_state_windows.go: the shards 75..79 on windows-latest, no cgo)
+            const others = [new Set(["cgo", "linux", "amd64", "unix", "gc"]), new Set(["windows", "amd64", "gc"])];
+            if (b && !holds(b[1], tags) && !(d === "" && others.some((o) => holds(b[1], o)))) fail("build constraint hides it from the mutation run: " + p + " (" + b[1] + ")");
+            if (!mutated.has(p)) fail("no mutant from this file in the results: " + p);
+          } };
+          walk("");
+          console.log(`${n} shipped source file(s) checked, ${excl.length} excluded path(s), ${bad} problem(s)`);
+          process.exit(bad ? 1 : 0);
+          EOF
       - name: Merge shards and check the ledger
-        run: >
-          node .github/scripts/mutation-merge.mjs --crate="$CRATE" --shards="$SHARDS" --reports=reports
-          --checker="$MONO/tools/pca-audit" --src="$GITHUB_WORKSPACE"
+        # a ledgered equivalent that a test KILLED this run is a notice (nondeterministic killer), not a stale entry: stale-killed.mjs
+        run: |
+          rc=0
+          node .github/scripts/mutation-merge.mjs --crate="$CRATE" --shards="$SHARDS" --reports=reports \
+            --checker="$MONO/tools/pca-audit" --src="$GITHUB_WORKSPACE" > "$RUNNER_TEMP/merge.log" 2>&1 || rc=$?
+          cat "$RUNNER_TEMP/merge.log"
+          node .github/scripts/stale-killed.mjs "$RUNNER_TEMP/merge.log" mut-results "$rc" sigstore-results module-results
+      # gate honesty: a run-error or timed-out mutant ended without any test deciding it (out of memory under ulimit -v, stack
+      # overflow, signal death, a time limit). Each must be in mutation-run-errors.json with a per-mutant proof (a timeout: the
+      # mutant itself loops or allocates without bound); an unlisted one, an entry without a reason or a stale entry fails.
+      - name: Run errors and timeouts are each proven mutant-caused
+        if: ${{ !cancelled() }}
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const got = []; let shards = 0;
+            const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/^run-errors-\d+\.json$/.test(e.name)) { shards++; got.push(...JSON.parse(fs.readFileSync(p, "utf8"))); } } };
+            walk("reports");
+            const want = Number(process.env.SHARDS);
+            if (shards !== want) { console.error(`::error::run-error lists from ${shards}/${want} shards (a missing list is a failure)`); process.exit(1); }
+            const led = JSON.parse(fs.readFileSync(process.env.MONO + "/sdks/go-pca/mutation-run-errors.json", "utf8"));
+            const key = (m) => [m.file, m.text, m.mutant].join(" | ");
+            const have = new Map(); for (const m of got) have.set(key(m), (have.get(key(m)) || 0) + 1);
+            let bad = 0; const used = new Set();
+            const res = []; const rw = (d) => { for (const x of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, x.name); if (x.isDirectory()) rw(p); else if (x.name === "results.json") res.push(...JSON.parse(fs.readFileSync(p, "utf8"))); } };
+            if (fs.existsSync("mut-results")) rw("mut-results");
+            const killed = (e) => res.filter((r) => r.status === "killed" && r.file === e.file && r.mutant === e.mutant && String(r.line_text || "").trim() === e.text.trim()).length;
+            for (const e of led) {
+              if (!e.reason) { console.error("::error::run-error ledger entry without a reason: " + key(e)); bad++; }
+              const n = have.get(key(e)) || 0, k = e.multiplicity || 1;
+              // a racy entry (the mutant crashes a worker goroutine, and whether the test goroutine reports a failure first is a race) may
+              // match fewer than its count only when each missing occurrence is plainly KILLED in this run (mut-results)
+              if (n !== k && !(e.racy === true && n < k && killed(e) >= k - n)) { console.error(`::error::run-error ledger entry covers ${k}, the run has ${n}${e.racy === true ? " and only " + killed(e) + " matching mutant(s) were plainly killed" : ""}: ${key(e)}`); bad++; }
+              used.add(key(e));
+            }
+            for (const m of got) if (!used.has(key(m))) { console.error(`::error::UNPROVEN run error, no test decided it: ${key(m)} (line ${m.lineno}; ${m.evidence})`); bad++; }
+            console.log(`${got.length} run-error mutant(s) over ${shards} shards, ${led.length} ledger entries, ${bad} problem(s)`);
+            process.exit(bad ? 1 : 0);
+          '
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: survivors-merged
           path: reports/survivors-merged.json
           if-no-files-found: ignore
+
+  reuse-record:
+    name: reuse record
+    needs: [reuse, snapshot, prep, shard-root, shard-root-b, shard-root-c, shard, shard-windows, lessc-mutants, gt-mutants, merge]
+    # only a run whose jobs all passed (skipped by their own conditions is fine), that was not partial and not itself a reuse, leaves a record
+    if: ${{ !cancelled() && needs.reuse.outputs.skip != 'true' && needs.reuse.outputs.hash != '' && !(false) && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && needs.merge.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - id: rec
+        env:
+          GATE_FULL: ${{ inputs.full || (startsWith(github.ref_name, 'ci/') && endsWith(github.ref_name, '-rc') || startsWith(github.ref_name, 'ci/gate-')) || contains(github.event.head_commit.message, '[force-full]') }}
+          HASH: ${{ needs.reuse.outputs.hash }}
+        run: node .github/scripts/ci-reuse.mjs record --workflow=mutation --hash="$HASH" --out="$RUNNER_TEMP/reuse-record"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.rec.outputs.artifact }}
+          path: ${{ runner.temp }}/reuse-record/
+          retention-days: 21

@@ -28,9 +28,13 @@ func TestJsvalNumberStringTable(t *testing.T) {
 		{0, "0"}, {math.Copysign(0, -1), "-0"},
 	}
 	for _, c := range cases {
-		if got := jsNumberString(c.f); got != c.want {
+		// the lexeme keeps -0; String(-0) is "0" (checked below)
+		if got := jsNumberLexeme(c.f); got != c.want {
 			t.Errorf("jsNumberString(%v) = %q, want %q", c.f, got, c.want)
 		}
+	}
+	if jsNumberString(math.Copysign(0, -1)) != "0" {
+		t.Error("String(-0) must be 0")
 	}
 	if jsLenientNumber(math.Copysign(0, -1)) != "0" || jsLenientNumber(0) != "0" || jsLenientNumber(2.5) != "2.5" {
 		t.Error("jsLenientNumber")

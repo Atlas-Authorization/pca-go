@@ -1,0 +1,45 @@
+name: FN-DSA (libfndsa)
+
+# fndsakit: real FN-DSA through cgo over libfndsa (Pornin fn-dsa 0.4.0, built here from the flagship crate), plus the core's 480-case corpus
+# replay. The cgo module is separate so the core stays cgo-free. The native replays the cross-implementation known answers byte for byte.
+on:
+  push:
+    branches: [main, 'ci/**']
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fndsa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source layout (full shared corpus and the FN-DSA crate from the flagship)
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - name: FN-DSA registry, framing and hybrid replay (480 cases, mock backend, pure Go)
+        working-directory: ${{ env.PCA_MONO_SDK }}
+        run: go test -count=1 -run 'TestFnDsa' .
+      - name: libfndsa (cargo build --features capi)
+        run: echo "ATLAS_PCA_LIBFNDSA=$(.github/scripts/build-libfndsa.sh "$RUNNER_TEMP/fndsa" "$RUNNER_TEMP/mono/packages/pca-fndsa-wasm/crate" | tail -1)" >> "$GITHUB_ENV"
+      - name: The vendored header matches the crate's
+        run: diff "$ATLAS_PCA_LIBFNDSA/pca_fndsa.h" "$PCA_MONO_SDK/fndsakit/pca_fndsa.h"
+      - name: Known-answer replay, refusals and framing with the real backend
+        working-directory: ${{ env.PCA_MONO_SDK }}/fndsakit
+        env:
+          CGO_LDFLAGS: -L${{ env.ATLAS_PCA_LIBFNDSA }}
+          LD_LIBRARY_PATH: ${{ env.ATLAS_PCA_LIBFNDSA }}
+          ATLAS_PCA_LIBFNDSA_REQUIRED: '1'
+        run: |
+          go mod tidy -e
+          go test -count=1 ./...  # includes fndsa_e2e_test.go: fn-dsa PCActn fixture sign/verify and the fn-dsa producer vectors, gated on ATLAS_PCA_LIBFNDSA

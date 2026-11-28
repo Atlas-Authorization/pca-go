@@ -260,6 +260,12 @@ func isParamPath(path any) bool {
 func setNested(root map[string]any, path string, value any) bool {
 	segs := strings.Split(path, ".")
 	cur := root
+	// the reference sets a prototype for a `__proto__` segment and then cannot read it back (a refusal): never walk through it
+	for _, k := range segs {
+		if k == "__proto__" {
+			return false
+		}
+	}
 	for _, k := range segs[:len(segs)-1] {
 		if _, ok := cur[k]; !ok {
 			cur[k] = map[string]any{}
@@ -364,3 +370,18 @@ func receiptSuiteReason(r any, keySets []any) string {
 	}
 	return ""
 }
+
+// IsPlainObject reports whether v is a JSON object that is not an array (decoded JSON has no prototypes).
+func IsPlainObject(v any) bool {
+	_, ok := v.(map[string]any)
+	return ok
+}
+
+// OwnGet is the own-property lookup that never reads an inherited member; ok is false for a missing member and for a nil object.
+func OwnGet(o map[string]any, k string) (v any, ok bool) {
+	v, ok = o[k]
+	return v, ok
+}
+
+// NullRecord is a record whose keys such as `constructor`, `toString` or `__proto__` are ordinary keys.
+func NullRecord() map[string]any { return map[string]any{} }

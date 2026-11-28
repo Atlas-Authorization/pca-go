@@ -700,7 +700,7 @@ func verifyReceiptAgainstHolder(r map[string]any, holder map[string]any, keySets
 		if e == nil || e["pk"] != r["signer"] || issued < jsF(e["not_before"]) {
 			continue
 		}
-		if na, has := e["not_after"]; has && (issued > jsF(na) || jsF(na) < now-receiptSkewMs) {
+		if na, has := e["not_after"]; has && (issued > jsF(na) || !(jsF(na) >= now-receiptSkewMs)) {
 			continue
 		}
 		ealg, ealgP := e["alg"]

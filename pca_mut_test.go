@@ -4,6 +4,7 @@ package pca
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 )
@@ -83,7 +84,14 @@ func TestMutCanonicalizeEscapes(t *testing.T) {
 			t.Fatalf("%v: %q %v", c.in, got, err)
 		}
 	}
-	for _, in := range []any{9007199254740992, -9007199254740992, json.Number("1.0"), 1.5, struct{}{},
+	// a Go float64 follows the strict number rules: a short decimal canonicalises, an exponent form, -0 and a non-finite value do not
+	if got, err := Canonicalize(1.5); err != nil || got != "1.5" {
+		t.Fatalf("1.5: %q %v", got, err)
+	}
+	if _, err := Canonicalize(math.Copysign(0, -1)); err == nil {
+		t.Fatal("-0 must be refused")
+	}
+	for _, in := range []any{9007199254740992, -9007199254740992, json.Number("1.0"), 1e-7, math.NaN(), struct{}{},
 		"\xed\xa0\x80", map[string]any{"\xed\xa0\x80": 1}, []any{"\xed\xa0\x80"}, map[string]any{"k": "\xed\xa0\x80"}} {
 		if s, err := Canonicalize(in); err == nil || s != "" {
 			t.Fatalf("%v should fail, got %q", in, s)
@@ -198,7 +206,7 @@ func TestMutWireAudNonceCaps(t *testing.T) {
 		}
 	}
 	p["aud"] = ""
-	if ValidateWireV2(p) != "'aud' must be a non-empty string" {
+	if ValidateWireV2(p) != "'aud' must be a non-empty string (<= 256 UTF-8 bytes)" {
 		t.Fatal("empty aud")
 	}
 	p["aud"] = "rs"
@@ -209,7 +217,7 @@ func TestMutWireAudNonceCaps(t *testing.T) {
 		}
 	}
 	p["nonce"] = 5
-	if ValidateWireV2(p) != "'nonce' must be a non-empty string" {
+	if ValidateWireV2(p) != "'nonce' must be a non-empty string (<= 128 UTF-8 bytes)" {
 		t.Fatal("non-string nonce")
 	}
 }

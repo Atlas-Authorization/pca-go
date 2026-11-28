@@ -24,22 +24,33 @@ var k042AccCases []k042AccCase
 
 func k042AccLoad(t *testing.T) []k042AccCase {
 	if k042AccCases == nil {
-		b, err := os.ReadFile("testdata/k042-intentacc.json")
-		if err != nil {
-			t.Fatal(err)
+		add := func(path string, key string, minimum int) {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// parse leniently (the lexemes matter), then re-shape
+			doc, err := ParseJSONLenient(b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			list, ok := doc.([]any)
+			if key != "" {
+				list, _ = doc.(map[string]any)[key].([]any)
+			} else if !ok {
+				t.Fatalf("%s: not a list", path)
+			}
+			if len(list) < minimum {
+				t.Fatalf("%s: corpus too small: %d", path, len(list))
+			}
+			for _, o := range list {
+				m := o.(map[string]any)
+				k042AccCases = append(k042AccCases, k042AccCase{Name: m["name"].(string), Fn: m["fn"].(string), Args: m["args"].([]any), Out: m["out"]})
+			}
 		}
-		// parse leniently (the lexemes matter), then re-shape
-		doc, err := ParseJSONLenient(b)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, o := range doc.([]any) {
-			m := o.(map[string]any)
-			k042AccCases = append(k042AccCases, k042AccCase{Name: m["name"].(string), Fn: m["fn"].(string), Args: m["args"].([]any), Out: m["out"]})
-		}
-		if len(k042AccCases) < 1500 {
-			t.Fatalf("corpus too small: %d", len(k042AccCases))
-		}
+		add("testdata/k042-intentacc.json", "", 1500)
+		// the conformance corpus file (intent-state-vectors.json): the same accumulator / receipt cases plus the session-history cases
+		add(dir+"intent-state-vectors.json", "cases", 3000)
 	}
 	return k042AccCases
 }
@@ -238,4 +249,76 @@ func TestK042AccKeySetsAndHolder(t *testing.T) {
 		}
 		return verifyReceiptAgainstHolder(k042M(a[0]), k042M(a[1]), keySets, fl(a[3]), receiptFreshness{maxReceiptAgeMs: fl(a[4]), maxKeySetAgeMs: fl(a[5]), tracked: tracked})
 	})
+}
+
+// ---- the session-history cases (intent_history.go; conformance/intent-state-vectors.json) ----------------------------------
+
+func TestIntentStateHistory(t *testing.T) {
+	schemaOf := func(v any) (any, bool) { return v, v != nil }
+	k042AccRun(t, "inWindow", func(a []any) any { return inWindow(k042M(a[0]), a[1], a[2]) })
+	k042AccRun(t, "accKeyOf", func(a []any) any {
+		k, ok := accKeyOf(k042M(a[0]), k042M(a[1]))
+		if !ok {
+			return nil
+		}
+		return k
+	})
+	k042AccRun(t, "accPreState", func(a []any) any {
+		cand := k042M(a[2])
+		schema, have := schemaOf(a[3])
+		hist, _ := a[1].([]any)
+		pre, ok := accPreState(k042M(a[0]), hist, k042M(cand["params"]), cand["t"], schema, have)
+		if !ok {
+			return map[string]any{"throws": true}
+		}
+		return pre
+	})
+	k042AccRun(t, "accPost", func(a []any) any {
+		cand := k042M(a[2])
+		schema, have := schemaOf(a[3])
+		hist, _ := a[1].([]any)
+		post, ok := accPost(k042M(a[0]), hist, cand["verb"].(string), k042M(cand["params"]), cand["t"], schema, have)
+		if !ok {
+			return map[string]any{"throws": true}
+		}
+		return jsNumber(post)
+	})
+	k042AccRun(t, "monitorStep", func(a []any) any { return monitorStep(k042M(a[0]), a[1].(string), k042M(a[2])) })
+	k042AccRun(t, "monitorState", func(a []any) any {
+		hist, _ := a[1].([]any)
+		return monitorState(k042M(a[0]), hist)
+	})
+}
+
+// TestIntentStateCorpusIsFullyRun: every function of the corpus file has a runner above (a new function without one fails).
+func TestIntentStateCorpusIsFullyRun(t *testing.T) {
+	known := map[string]bool{}
+	for _, f := range []string{"accumulatorDeclError", "monitorDeclError", "monitorStates", "trackedKeySetError", "preStateError", "preValue", "combineAcc", "accSelects", "accValueOf", "receiptArithmeticOk", "pcactnReservationDigest", "receiptShapeError", "keySetShapeError", "verifyKeySet", "verifyReceiptSignature", "verifyReceiptAgainstHolder", "inWindow", "accKeyOf", "accPreState", "accPost", "monitorStep", "monitorState"} {
+		known[f] = true
+	}
+	b, err := os.ReadFile(dir + "intent-state-vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := ParseJSONLenient(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := doc.(map[string]any)
+	if m["format"] != "pca-intent-state-vectors" || num(m["ver"]) != 1 {
+		t.Fatalf("unexpected format %v / ver %v", m["format"], m["ver"])
+	}
+	seen := map[string]int{}
+	for _, c := range m["cases"].([]any) {
+		fn := c.(map[string]any)["fn"].(string)
+		if !known[fn] {
+			t.Errorf("no runner for corpus function %q", fn)
+		}
+		seen[fn]++
+	}
+	for f := range known {
+		if seen[f] == 0 {
+			t.Errorf("corpus has no case for %q", f)
+		}
+	}
 }

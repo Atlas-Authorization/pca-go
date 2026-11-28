@@ -1,0 +1,39 @@
+name: Endemic LWE base OT
+
+# lweotkit: the post-quantum endemic base OT through cgo over a small C library (liblweot) that wraps the audited pqc_kyber K-PKE (built here from
+# the flagship's crate). A separate module so the core stays cgo-free. The native replays the TypeScript reference corpus, byte for byte.
+on:
+  push:
+    branches: [main, 'ci/**']
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lwe-ot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source layout (full shared corpus and the lattice crate from the flagship)
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - name: liblweot (cargo build --features capi)
+        run: echo "LWEOT_LIB=$(.github/scripts/build-liblweot.sh "$RUNNER_TEMP/lweot" "$RUNNER_TEMP/mono/packages/pca-mpc-lwe-ot-wasm/crate" | tail -1)" >> "$GITHUB_ENV"
+      - name: The vendored header matches the crate's
+        run: diff "$LWEOT_LIB/pca_lwe_ot.h" "$PCA_MONO_SDK/lweotkit/pca_lwe_ot.h"
+      - name: Endemic OT replay
+        working-directory: ${{ env.PCA_MONO_SDK }}/lweotkit
+        env:
+          CGO_LDFLAGS: -L${{ env.LWEOT_LIB }}
+          LD_LIBRARY_PATH: ${{ env.LWEOT_LIB }}
+        run: go test -count=1 ./...

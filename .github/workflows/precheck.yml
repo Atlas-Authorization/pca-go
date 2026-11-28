@@ -1,0 +1,117 @@
+name: Precheck
+
+# Compile-only gate, go vet plus a test-binary compile (no test runs) for the root module and every separate module.
+# Runs only on pre/** pushes (and by hand): it builds and typechecks everything, tests included, and runs no test.
+# Push pre/<version> first and the full ci/** run only when this is green.
+on:
+  push:
+    branches: ['pre/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  precheck:
+    name: compile everything (tests included, none run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - name: Flagship checkout
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh
+      - name: Root module (default tags, then the less and goal-kernel build tags)
+        id: c0
+        continue-on-error: true
+        shell: bash
+        run: |
+          rc=0
+          # the extracted goal kernel under goalkernel/internal/gen is generated: it is built and its tests compiled, but not vetted
+          vetpkgs() { go list "$@" ./... | grep -v '/goalkernel/internal/gen' ; }
+          go build ./... || rc=1
+          go vet $(vetpkgs) || rc=1
+          go test -run XXX_NONE -count=1 ./... || rc=1
+          go vet -tags less $(vetpkgs -tags less) || rc=1
+          go test -run XXX_NONE -count=1 -tags less ./... || rc=1
+          if find goalkernel/internal/gen -name '*.go' 2>/dev/null | grep -q .; then
+            go build -tags pcagoalkernel ./... || rc=1
+            go vet -tags pcagoalkernel $(vetpkgs -tags pcagoalkernel) || rc=1
+            go test -run XXX_NONE -count=1 -tags pcagoalkernel ./... || rc=1
+          fi
+          exit $rc
+      # the pure-Go adapter modules: each has its own go.mod that replaces the library with this checkout
+      - name: Adapter modules (build, vet, test binaries compiled)
+        id: c1
+        continue-on-error: true
+        shell: bash
+        run: |
+          rc=0
+          for mod in adakit adkgo anthropic blstkit echo eino genkit gin langchaingo openai sigstore sqltest; do
+            [ -f "$mod/go.mod" ] || { echo "skip (absent in this tree): $mod"; continue; }
+            echo "::group::$mod"
+            (cd "$mod" && go mod tidy -e && go build ./... && go vet ./... && go test -run XXX_NONE -count=1 ./...) || { echo "::error::$mod failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit $rc
+      # platform-specific files (owner-only ACLs on Windows, the Unix file modes) are only compiled for their own OS: vet and compile the
+      # tests for Windows and macOS too; no cgo, so the opt-in native kits (and blstkit and adakit, whose bindings need cgo) are skipped, and nothing is run (-exec /bin/true)
+      - name: Cross-platform compile (windows/amd64 and darwin/arm64, no cgo)
+        id: cx
+        continue-on-error: true
+        shell: bash
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          rc=0
+          for target in windows/amd64 darwin/arm64; do
+            export GOOS="${target%/*}" GOARCH="${target#*/}"
+            echo "::group::$target root"
+            go build ./... || rc=1
+            go vet $(go list ./... | grep -v '/goalkernel/internal/gen') || rc=1
+            go test -run XXX_NONE -count=1 -exec /bin/true ./... || rc=1
+            echo "::endgroup::"
+            for mod in adkgo anthropic echo eino genkit gin langchaingo openai sigstore sqltest; do
+              [ -f "$mod/go.mod" ] || continue
+              echo "::group::$target $mod"
+              (cd "$mod" && go build ./... && go vet ./... && go test -run XXX_NONE -count=1 -exec /bin/true ./...) || { echo "::error::$target $mod failed"; rc=1; }
+              echo "::endgroup::"
+            done
+          done
+          exit $rc
+      - name: Example module
+        id: c2
+        continue-on-error: true
+        run: cd examples/gin-server && go mod tidy -e && go build ./... && go vet ./...
+      # the opt-in cgo kits link a native library that only their own workflows build: here they are vetted (cgo preprocessing and
+      # type-check of the sources and the tests, no link), which needs only the committed headers
+      - name: Source layout for the kits (full shared corpus from the flagship)
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - name: Native-library kits (vet only, no link)
+        id: c3
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ env.PCA_MONO_SDK }}
+        run: |
+          rc=0
+          for mod in sealkit fndsakit lweotkit lweotkit/party zkkit wasmhost wasmhostbin; do
+            [ -f "$mod/go.mod" ] || { echo "skip (absent in this tree): $mod"; continue; }
+            echo "::group::$mod"
+            (cd "$mod" && go mod tidy -e && go vet ./...) || { echo "::error::$mod failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit $rc
+      # every check above runs even when an earlier one failed; this step makes the job red when any did
+      - name: Summary
+        if: ${{ always() && (steps.c0.outcome == 'failure' || steps.c1.outcome == 'failure' || steps.c2.outcome == 'failure' || steps.c3.outcome == 'failure' || steps.cx.outcome == 'failure') }}
+        run: |
+          echo "::error::one or more compile checks failed; each failing step above has the details"
+          exit 1

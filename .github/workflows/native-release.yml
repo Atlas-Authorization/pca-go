@@ -1,0 +1,260 @@
+name: Native libraries (release)
+
+# The opt-in cgo modules install and run with nothing to build. On a release tag this builds, on native runners, the libraries the modules
+# need and publishes them inside the tagged modules:
+#   fndsakit, lweotkit, zkkit  static archives (libfndsa.a, liblweot.a, libpcazk.a, from the Rust crates, cargo rustc --crate-type staticlib) in lib/<os>_<arch>/;
+#                       a Go module zip cannot run cargo, and static archives link into the user's binary with no runtime lookup
+#   sealkit             libsealc (SEAL's C export library, a shared library upstream) in lib/<os>_<arch>/, linked through an rpath
+#   wasmhostbin         pca-wasmtime-host embedded per platform (go:embed), for the core module's RunComponent
+# Needing nothing: blstkit (the blst Go module vendors its C and assembly; the GT shim is compiled in the module), wasmhost (wasmtime-go
+# ships its static libwasmtime per platform) and the LESS suites (the patched reference C is vendored in lessc/, built with -tags less).
+# Platforms: linux and macOS (amd64, arm64) and windows amd64. On Windows cgo links with mingw gcc, so the Rust archives are built for
+# x86_64-pc-windows-gnu (static, same lib*.a form); sealkit uses sealc.dll built with MSVC by the shared script (a DLL has no rpath: it must
+# sit next to the executable or on PATH); the sandbox host is pca-wasmtime-host.exe. Windows is the least exercised platform: the smoke job
+# below is what shows whether each piece works there, and a kit that fails it stays out of the release until fixed.
+# A source checkout holds no libraries (empty placeholders for the embedded hosts); the tagged commit adds them and rewrites each kit's go.mod
+# (no replace directives, requirements on the same version), then tags every kit as <kit>/<version>.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SEAL_TAG: v4.1.2
+
+jobs:
+  build:
+    name: build (${{ matrix.plat }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, plat: linux_amd64 }
+          - { os: ubuntu-24.04-arm, plat: linux_arm64 }
+          - { os: macos-15-intel, plat: darwin_amd64 }
+          - { os: macos-latest, plat: darwin_arm64 }
+          - { os: windows-latest, plat: windows_amd64 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Flagship crates
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - name: Static libraries (liblweot, libfndsa, libpcazk) and the sandbox host
+        shell: bash
+        env:
+          PCA_STATIC: '1'
+          PLAT: ${{ matrix.plat }}
+        run: |
+          set -euo pipefail
+          S="$GITHUB_WORKSPACE/stage"
+          mkdir -p "$S/lweotkit/lib/$PLAT" "$S/fndsakit/lib/$PLAT" "$S/zkkit/lib/$PLAT" "$S/sealkit/lib/$PLAT" "$S/wasmhostbin/bin"
+          if [ "$RUNNER_OS" = Windows ]; then # mingw-gcc cgo links GNU-ABI archives
+            rustup target add x86_64-pc-windows-gnu
+            export CARGO_BUILD_TARGET=x86_64-pc-windows-gnu
+          fi
+          .github/scripts/build-liblweot.sh "$RUNNER_TEMP/lweot" "$RUNNER_TEMP/mono/packages/pca-mpc-lwe-ot-wasm/crate"
+          cp "$RUNNER_TEMP/lweot/liblweot.a" "$S/lweotkit/lib/$PLAT/"
+          .github/scripts/build-libfndsa.sh "$RUNNER_TEMP/fndsa" "$RUNNER_TEMP/mono/packages/pca-fndsa-wasm/crate"
+          cp "$RUNNER_TEMP/fndsa/libfndsa.a" "$S/fndsakit/lib/$PLAT/"
+          .github/scripts/build-libpcazk.sh "$RUNNER_TEMP/pcazk" "$RUNNER_TEMP/mono/packages/pca-zk/crate"
+          cp "$RUNNER_TEMP/pcazk/libpcazk.a" "$S/zkkit/lib/$PLAT/"
+          unset CARGO_BUILD_TARGET # the host is a plain program for the runner's own platform
+          PCA_STATIC= .github/scripts/build-wasmtime-host.sh "$RUNNER_TEMP/wasmtime-host" "$RUNNER_TEMP/mono/packages/pca-sandbox/wasmtime-host"
+          if [ "$RUNNER_OS" = Windows ]; then
+            rm -f "$S/wasmhostbin/bin/pca-wasmtime-host_windows_amd64.exe"
+            cp "$RUNNER_TEMP/wasmtime-host/pca-wasmtime-host.exe" "$S/wasmhostbin/bin/pca-wasmtime-host_windows_amd64.exe"
+          else
+            cp "$RUNNER_TEMP/wasmtime-host/pca-wasmtime-host" "$S/wasmhostbin/bin/pca-wasmtime-host_$PLAT"
+          fi
+      - name: libsealc (shared; soname / install name made relocatable for the rpath)
+        shell: bash
+        env:
+          PLAT: ${{ matrix.plat }}
+        run: |
+          set -euo pipefail
+          dir="$(.github/scripts/build-libsealc.sh "$SEAL_TAG" "$RUNNER_TEMP/seal" | tail -1)"
+          out="$GITHUB_WORKSPACE/stage/sealkit/lib/$PLAT"
+          if [ "$RUNNER_OS" = macOS ]; then
+            cp -L "$(find "$dir" -name 'libsealc*.dylib' | head -1)" "$out/libsealc.dylib"
+            install_name_tool -id @rpath/libsealc.dylib "$out/libsealc.dylib"
+          elif [ "$RUNNER_OS" = Windows ]; then # the shared script prints the directory holding sealc.dll
+            cp "$(find "$dir" -name 'sealc.dll' | head -1)" "$out/sealc.dll"
+          else
+            sudo apt-get install -y --no-install-recommends patchelf >/dev/null
+            cp -L "$(find "$dir" -name 'libsealc.so*' | head -1)" "$out/libsealc.so"
+            patchelf --set-soname libsealc.so "$out/libsealc.so"
+          fi
+          ls -l "$out"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.plat }}
+          path: stage
+          if-no-files-found: error
+
+  assemble:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: stage
+          merge-multiple: true
+      - name: Overlay the libraries on the source tree
+        run: |
+          cp -R stage/. .
+          rm -rf stage .git
+          tar -czf "$RUNNER_TEMP/tree.tgz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-tree
+          path: ${{ runner.temp }}/tree.tgz
+          if-no-files-found: error
+
+  # Installs the assembled modules as a consumer would, on a clean runner: no checkout, no toolchain variables, nothing built; each
+  # kit loads its library and makes one call.
+  smoke:
+    name: smoke (${{ matrix.plat }})
+    runs-on: ${{ matrix.os }}
+    needs: assemble
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, plat: linux_amd64 }
+          - { os: ubuntu-24.04-arm, plat: linux_arm64 }
+          - { os: macos-15-intel, plat: darwin_amd64 }
+          - { os: macos-latest, plat: darwin_arm64 }
+          - { os: windows-latest, plat: windows_amd64 }
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: go-tree
+          path: ${{ runner.temp }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+          cache: false
+      - name: Consumer module
+        shell: bash
+        run: |
+          set -euo pipefail
+          RT="$RUNNER_TEMP"; [ "$RUNNER_OS" = Windows ] && RT="$(cygpath -u "$RUNNER_TEMP")"
+          P="$RT/pkg"; C="$RT/consumer"
+          mkdir -p "$P" "$C"; tar -xzf "$RT/tree.tgz" -C "$P"
+          if [ "$RUNNER_OS" = Windows ]; then
+            P="$(cygpath -m "$P")"                 # Go wants a Windows path in replace directives
+            export PATH="$P/sealkit/lib/windows_amd64:$PATH" # sealc.dll is found through PATH
+          fi
+          cd "$C"
+          cat > main.go <<'GO'
+          package main
+
+          import (
+          	"crypto/sha256"
+          	"encoding/hex"
+          	"fmt"
+          	"os"
+          	"os/exec"
+
+          	pca "github.com/Atlas-Authorization/pca-go"
+          	"github.com/Atlas-Authorization/pca-go/blstkit"
+          	"github.com/Atlas-Authorization/pca-go/fndsakit"
+          	"github.com/Atlas-Authorization/pca-go/lweotkit"
+          	"github.com/Atlas-Authorization/pca-go/sealkit"
+          	"github.com/Atlas-Authorization/pca-go/wasmhostbin"
+          	"github.com/Atlas-Authorization/pca-go/zkkit"
+          )
+
+          func must(what string, err error) {
+          	if err != nil {
+          		fmt.Println("FAIL", what, err)
+          		os.Exit(1)
+          	}
+          	fmt.Println("ok", what)
+          }
+
+          func main() {
+          	_, _, err := blstkit.AbeSetup()
+          	must("blstkit", err)
+          	_, vk, err := fndsakit.KeygenRandom("fn-dsa-512")
+          	must("fndsakit", err)
+          	_ = vk
+          	_, _, err = lweotkit.KPKEKeygen(make([]byte, 32))
+          	must("lweotkit", err)
+          	_, err = sealkit.Keygen()
+          	must("sealkit", err)
+          	_, _, err = zkkit.Verify(pca.Groth16CurveBn254, false, []byte("{}"), []byte("{}"), []byte("[]")) // invalid with a reason, no error: the library answered
+          	must("zkkit", err)
+          	o, err := wasmhostbin.Options(pca.ComponentOptions{})
+          	must("wasmhostbin options", err)
+          	b, err := os.ReadFile(o.Host)
+          	must("wasmhostbin read", err)
+          	s := sha256.Sum256(b)
+          	if hex.EncodeToString(s[:]) != o.ExpectedSHA256 {
+          		must("wasmhostbin pin", fmt.Errorf("digest mismatch"))
+          	}
+          	// the host runs (a usage error exit is fine; an exec failure is not)
+          	if err := exec.Command(o.Host).Run(); err != nil {
+          		if _, ok := err.(*exec.ExitError); !ok {
+          			must("wasmhostbin exec", err)
+          		}
+          	}
+          	fmt.Println("ok wasmhostbin")
+          }
+          GO
+          go mod init smoke
+          for m in "" blstkit fndsakit lweotkit sealkit wasmhostbin zkkit; do
+            path="github.com/Atlas-Authorization/pca-go${m:+/$m}"
+            go mod edit -require="$path@v0.0.0" -replace="$path=$P${m:+/$m}"
+          done
+          go mod tidy -e
+          env -u CGO_LDFLAGS -u LD_LIBRARY_PATH CGO_ENABLED=1 go run .
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: smoke
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: stage
+          merge-multiple: true
+      - name: Commit the libraries into the kits and tag them
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="$GITHUB_REF_NAME"
+          KITS="blstkit fndsakit lweotkit lweotkit/party sealkit wasmhost wasmhostbin zkkit"
+          cp -R stage/. .; rm -rf stage
+          git config user.name "github-actions[bot]"; git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git checkout --detach
+          for m in $KITS; do
+            ( cd "$m"
+              for r in $(go mod edit -json | python3 -c 'import json,sys; [print(x["Old"]["Path"]) for x in json.load(sys.stdin).get("Replace") or []]'); do
+                go mod edit -dropreplace="$r"; done
+              for r in $(go mod edit -json | python3 -c 'import json,sys; [print(x["Path"]) for x in json.load(sys.stdin).get("Require") or [] if x["Path"].startswith("github.com/Atlas-Authorization/pca-go")]'); do
+                go mod edit -require="$r@$VER"; done )
+          done
+          git add -f lweotkit/lib fndsakit/lib zkkit/lib sealkit/lib wasmhostbin/bin
+          git add blstkit/go.mod fndsakit/go.mod lweotkit/go.mod lweotkit/party/go.mod sealkit/go.mod wasmhost/go.mod wasmhostbin/go.mod zkkit/go.mod
+          git commit -q -m "native libraries and module requirements for $VER"
+          for m in $KITS; do git tag "$m/$VER"; done
+          git push origin $(for m in $KITS; do printf 'refs/tags/%s/%s ' "$m" "$VER"; done)

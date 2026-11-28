@@ -1,0 +1,41 @@
+name: Sandbox WebAssembly hosts
+
+# wasmhost (separate module, cgo): wasmtime-go core-module host; the pinned-subprocess component host is in the core module. Runs against the real reference host (pca-wasmtime-host, built here from the flagship's crate and pinned by its SHA-256):
+# CI=true makes the real-host tests FAIL when PCA_WASMTIME_HOST_BIN / PCA_WASMTIME_HOST_SHA256 are missing, so a green run never skips them.
+on:
+  push:
+    branches: [main, 'ci/**']
+    tags: ['*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sandbox-wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source layout (shared corpus and the reference host crate from the flagship)
+        shell: bash
+        run: .github/scripts/fetch-flagship-corpus.sh --mono go-pca
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10' # not the go.mod floor 1.26.0 (memory-corruption bugs fixed in 1.26.2/1.26.9); shortcut: not 1.26.11, whose cgo check rejects wasmtime-go's bundled archive (golang/go#83126), move up once Go ships that fix
+      - name: pca-wasmtime-host (cargo build --release; exports PCA_WASMTIME_HOST_BIN and PCA_WASMTIME_HOST_SHA256)
+        run: .github/scripts/build-wasmtime-host.sh "$RUNNER_TEMP/wasmtime-host" "$RUNNER_TEMP/mono/packages/pca-sandbox/wasmtime-host"
+      - name: Component host tests (real host)
+        working-directory: ${{ env.PCA_MONO_SDK }}
+        run: go test -count=1 -run 'Component|RealHost' .
+      - name: wasmhost tests (wasmtime-go, cgo)
+        working-directory: ${{ env.PCA_MONO_SDK }}/wasmhost
+        env:
+          CGO_ENABLED: '1'
+        run: |
+          go mod tidy -e
+          go test -count=1 ./...
